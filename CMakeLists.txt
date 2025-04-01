@@ -48,6 +48,7 @@ install(PROGRAMS
   scripts/joystick_pub_test.py 
   scripts/UR_joystick_move.py 
   scripts/V2_UR_joystick_move.py
+  scripts/ForceBridgeNode.py
   DESTINATION lib/${PROJECT_NAME}
 )
 ################# PYTHON #################
