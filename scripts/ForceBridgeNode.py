@@ -55,17 +55,19 @@ class ForceBridgeNode(Node):
             self.i = 0
 
         # Map the force vector
-        wrench_msg.wrench.force.x = msg.vector.x/500
-        wrench_msg.wrench.force.y = msg.vector.y/500
-        wrench_msg.wrench.force.z = msg.vector.z/500#-(msg.vector.z + 9.81) 
+        wrench_msg.wrench.force.x = -msg.vector.x/13
+        wrench_msg.wrench.force.y = -msg.vector.y/13
+        wrench_msg.wrench.force.z = -msg.vector.z/13 #-(msg.vector.z + 9.81) 
         # wrench_msg.wrench.force.z = msg.vector.z + add_factor
 
+        # senza gripper versione finale diviso 5 va bene ma si può anche aumentare volendo (es diviso 6/7)
+        # CON GRIPPER ESSENDO CUBO E MOLTO PIU GROSSO PROVO DIVISIONE MAGGIORE
         
 
         # Map the torque vector from the latest torque message
-        wrench_msg.wrench.torque.x = self.latest_torque.vector.x 
-        wrench_msg.wrench.torque.y = self.latest_torque.vector.y
-        wrench_msg.wrench.torque.z = self.latest_torque.vector.z     
+        wrench_msg.wrench.torque.x = -self.latest_torque.vector.x /13
+        wrench_msg.wrench.torque.y = -self.latest_torque.vector.y /13
+        wrench_msg.wrench.torque.z = -self.latest_torque.vector.z /13   
 
         # valori da AGGIUNGERE per "TARARE" presenza del gripper:
         # x: +0.008161112120385606
