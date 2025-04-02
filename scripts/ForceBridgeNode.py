@@ -24,7 +24,7 @@ class ForceBridgeNode(Node):
             10
         )
 
-        # Publisher to the WrenchStamped topic
+        # Publisher to the UR WrenchStamped topic
         self.publisher = self.create_publisher(
             WrenchStamped,
             '/force_torque_sensor_broadcaster_fake/wrench',
@@ -35,16 +35,13 @@ class ForceBridgeNode(Node):
 
         # Variables to store the latest torque values
         self.latest_torque = Vector3Stamped()
-
         self.i = 0
 
     def force_callback(self, msg: Vector3Stamped):
-        # Create a WrenchStamped message
-        wrench_msg = WrenchStamped()
 
+        wrench_msg = WrenchStamped()
         # Copy the header from the incoming message
         wrench_msg.header = msg.header
-
         wrench_msg.header.frame_id = "tool0"
         
         add_factor = 0
@@ -57,33 +54,40 @@ class ForceBridgeNode(Node):
         # Map the force vector
         wrench_msg.wrench.force.x = -msg.vector.x/13
         wrench_msg.wrench.force.y = -msg.vector.y/13
-        wrench_msg.wrench.force.z = -msg.vector.z/13 #-(msg.vector.z + 9.81) 
+        wrench_msg.wrench.force.z = -msg.vector.z/13
         # wrench_msg.wrench.force.z = msg.vector.z + add_factor
-
-        # senza gripper versione finale diviso 5 va bene ma si può anche aumentare volendo (es diviso 6/7)
-        # CON GRIPPER ESSENDO CUBO E MOLTO PIU GROSSO PROVO DIVISIONE MAGGIORE
-        
-
-        # Map the torque vector from the latest torque message
-        wrench_msg.wrench.torque.x = -self.latest_torque.vector.x /13
-        wrench_msg.wrench.torque.y = -self.latest_torque.vector.y /13
-        wrench_msg.wrench.torque.z = -self.latest_torque.vector.z /13   
-
-        # valori da AGGIUNGERE per "TARARE" presenza del gripper:
-        # x: +0.008161112120385606
-        # y: -10.273762241190953 # ma poi perchè lungo asse y???
-        # z: -1.3435256533282351
-        #  anche se senza tarare srobot sta fermo cmq, perchè? y>5 non dovrebbe muoverlo?
-
         self.i += 1
 
+        # Cap each component of the force vector to a maximum value
+        max_force = 25.0
+        force_components = ['x', 'y', 'z']
+        for component in force_components:
+            value = float(getattr(wrench_msg.wrench.force, component))
+            if value > max_force:
+                setattr(wrench_msg.wrench.force, component, float(max_force))
+            elif value < -max_force:
+                setattr(wrench_msg.wrench.force, component, float(-max_force))
+
+        # senza gripper versione finale diviso 5 va bene ma si può anche aumentare volendo (es diviso 6/7)
+        # CON GRIPPER ESSENDO CUBO E MOLTO PIU GROSSO/COMPLESSO SERVE DIVISIONE MAGGIORE (con 13 circa sembra abbastanza decente)
+
+        # Map the torque vector from the latest torque message
+        wrench_msg.wrench.torque.x = -self.latest_torque.vector.x /9
+        wrench_msg.wrench.torque.y = -self.latest_torque.vector.y /9
+        wrench_msg.wrench.torque.z = -self.latest_torque.vector.z /9 
+
+        # Cap each component of the torque vector to a maximum value
+        max_torque = 15.0
+        force_components = ['x', 'y', 'z']
+        for component in force_components:
+            value = float(getattr(wrench_msg.wrench.torque, component))
+            if value > max_torque:
+                setattr(wrench_msg.wrench.torque, component, float(max_torque))
+            elif value < -max_torque:
+                setattr(wrench_msg.wrench.torque, component, float(-max_torque))
+               
         # Publish the converted message
         self.publisher.publish(wrench_msg)
-
-        if wrench_msg.wrench.force.z > 10 or wrench_msg.wrench.force.z < -10:
-            self.get_logger().warn(f"########### FORZA Z pubblicata : {wrench_msg.wrench.force.z}")
-            self.get_logger().error(f"########### letto da plugin muj : {msg.vector.z}")
-            # rclpy.shutdown()
 
     def torque_callback(self, msg: Vector3Stamped):
         # Update the latest torque values

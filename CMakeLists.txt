@@ -42,9 +42,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 # Install Python executables
 install(PROGRAMS
-  scripts/py_node.py  
   scripts/get_gamepad_input.py 
-  scripts/test_sub_pub.py 
   scripts/joystick_pub_test.py 
   scripts/UR_joystick_move.py 
   scripts/V2_UR_joystick_move.py
