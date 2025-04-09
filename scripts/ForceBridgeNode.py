@@ -11,7 +11,8 @@ class ForceBridgeNode(Node):
         # Subscriber to the Vector3Stamped topic for force
         self.force_subscription = self.create_subscription(
             Vector3Stamped,
-            '/mj_utils_plugin/tcp_force_publisher',
+            # '/mj_utils_plugin/tcp_force_publisher',
+            'mujoco_ros/mj_utils_plugin/tcp_force_publisher',
             self.force_callback,
             10
         )
@@ -19,7 +20,7 @@ class ForceBridgeNode(Node):
         # Subscriber to the Vector3Stamped topic for torque
         self.torque_subscription = self.create_subscription(
             Vector3Stamped,
-            '/mj_utils_plugin/tcp_torque_publisher',
+            'mujoco_ros/mj_utils_plugin/tcp_torque_publisher',
             self.torque_callback,
             10
         )
@@ -70,7 +71,7 @@ class ForceBridgeNode(Node):
 
         # senza gripper versione finale diviso 5 va bene ma si può anche aumentare volendo (es diviso 6/7)
         # CON GRIPPER ESSENDO CUBO E MOLTO PIU GROSSO/COMPLESSO SERVE DIVISIONE MAGGIORE (con 13 circa sembra abbastanza decente)
-
+        
         # Map the torque vector from the latest torque message
         wrench_msg.wrench.torque.x = -self.latest_torque.vector.x /9
         wrench_msg.wrench.torque.y = -self.latest_torque.vector.y /9
@@ -85,6 +86,13 @@ class ForceBridgeNode(Node):
                 setattr(wrench_msg.wrench.torque, component, float(max_torque))
             elif value < -max_torque:
                 setattr(wrench_msg.wrench.torque, component, float(-max_torque))
+
+        # if wrench_msg.wrench.force.z > 10 or wrench_msg.wrench.force.z < -10:
+            # self.get_logger().error(f"########### FORZA Z pubblicata : {wrench_msg.wrench.force.z}")
+            # self.get_logger().warn(f"########### letto da plugin muj : {msg.vector.z}")
+            # rclpy.shutdown()
+        if wrench_msg.wrench.torque.x > 5 or wrench_msg.wrench.torque.x < -5:
+            self.get_logger().warn(f"########### TORQUE X PUB : {wrench_msg.wrench.torque.x}")
                
         # Publish the converted message
         self.publisher.publish(wrench_msg)
