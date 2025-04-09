@@ -1,0 +1,8 @@
+std_msgs/Float64 gripper_command
+geometry_msgs/PoseStamped cube_pose
+geometry_msgs/PoseStamped tcp_pose
+geometry_msgs/TwistStamped cube_velocity
+geometry_msgs/TwistStamped tcp_velocity
+geometry_msgs/WrenchStamped tcp_force_torque
+sensor_msgs/Image right_handcam_image
+sensor_msgs/Image left_handcam_image
