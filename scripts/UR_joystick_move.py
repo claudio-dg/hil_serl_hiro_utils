@@ -310,7 +310,7 @@ class AdmittanceControllerNode(Node):
         self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10)
 
         # pub al topic per controllare il gripper su MUJOCO
-        self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mj_utils_plugin/gripper_command', 10) 
+        self._mujoco_gripper_publisher = self.create_publisher(Float64, 'gripper_command', 10) 
 
         self.get_logger().info('Admittance Controller Node con joystick pronto.') 
 

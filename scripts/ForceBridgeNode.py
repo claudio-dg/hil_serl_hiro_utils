@@ -12,7 +12,7 @@ class ForceBridgeNode(Node):
         self.force_subscription = self.create_subscription(
             Vector3Stamped,
             # '/mj_utils_plugin/tcp_force_publisher',
-            'mujoco_ros/mj_utils_plugin/tcp_force_publisher',
+            'mujoco_ros/tcp_force_publisher',
             self.force_callback,
             10
         )
@@ -20,7 +20,7 @@ class ForceBridgeNode(Node):
         # Subscriber to the Vector3Stamped topic for torque
         self.torque_subscription = self.create_subscription(
             Vector3Stamped,
-            'mujoco_ros/mj_utils_plugin/tcp_torque_publisher',
+            'mujoco_ros/tcp_torque_publisher',
             self.torque_callback,
             10
         )
