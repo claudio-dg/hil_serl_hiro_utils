@@ -21,6 +21,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SimulationState.msg"
   DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
+
 ################# CPP #################
 
 # Include Cpp "include" directory
@@ -35,6 +36,7 @@ install(TARGETS
   cpp_executable
   DESTINATION lib/${PROJECT_NAME}
 )
+
 ################# PYTHON #################
 
 # Installa gli script Python manualmente
@@ -52,6 +54,18 @@ install(PROGRAMS
   scripts/ForceBridgeNode.py
   scripts/StateBridgeNode.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+# Installa i file di configurazione YAML
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Installa i file di launch
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
