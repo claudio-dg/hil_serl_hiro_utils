@@ -6,13 +6,17 @@ from std_msgs.msg import Float64
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
 from sensor_msgs.msg import Image
 from my_cpp_py_pkg.msg import SimulationState  # Custom message
+from std_msgs.msg import Float32MultiArray
+
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 class StateBridgeNode(Node):
     def __init__(self):
         super().__init__('sim_state_bridge_node')
 
         # Variabili per memorizzare i dati più recenti
-        self.gripper_command = Float64()
+        # self.gripper_command = Float64()
+        self.gripper_act_state = Float64()
         self.obj_poses = []  # Array dinamico per le pose dei cubi
         self.obj_velocities = []  # Array dinamico per le velocità dei cubi
         self.tcp_pose = PoseStamped()
@@ -20,14 +24,22 @@ class StateBridgeNode(Node):
         self.tcp_force_torque = WrenchStamped()
         self.camera_images = []  # Array dinamico per le immagini delle telecamere
 
+        self.robot_action = Float32MultiArray()  # Variabile per memorizzare l'azione ricevuta lato gym
+
         # Parametri per i topic
-        self.declare_parameter('obj_pose_topics', [""])
-        self.declare_parameter('obj_velocity_topics', [""])
-        self.declare_parameter('camera_topics', [""])
+        self.declare_parameter('states.obj_pose_topics', [""])
+        self.declare_parameter('states.obj_velocity_topics', [""])
+        self.declare_parameter('states.camera_topics', [""])
+
+        self.declare_parameter('actions.tcp_pose_topics', [""])
+        self.declare_parameter('actions.gripper_cmd_topics', [""])
 
         # Sub to the variable topics of objs 
-        obj_pose_topics = self.get_parameter('obj_pose_topics').get_parameter_value().string_array_value
-        obj_velocity_topics = self.get_parameter('obj_velocity_topics').get_parameter_value().string_array_value
+        obj_pose_topics = self.get_parameter('states.obj_pose_topics').get_parameter_value().string_array_value
+        obj_velocity_topics = self.get_parameter('states.obj_velocity_topics').get_parameter_value().string_array_value
+
+        action_tcp_pose_topics = self.get_parameter('actions.tcp_pose_topics').get_parameter_value().string_array_value
+        action_gripper_cmd_topics = self.get_parameter('actions.gripper_cmd_topics').get_parameter_value().string_array_value
 
         self.obj_pose_subscriptions = []
         self.obj_velocity_subscriptions = []
@@ -45,7 +57,7 @@ class StateBridgeNode(Node):
             )
 
         # Sub to the variable topics of cameras 
-        camera_topics = self.get_parameter('camera_topics').get_parameter_value().string_array_value
+        camera_topics = self.get_parameter('states.camera_topics').get_parameter_value().string_array_value
         self.camera_subscriptions = []
 
         for topic in camera_topics:
@@ -54,11 +66,36 @@ class StateBridgeNode(Node):
                 self.create_subscription(Image, topic, self.create_camera_callback(len(self.camera_images) - 1), 10)
             )
 
+        # Pub to the variable action topics from param file
+        self.tcp_pose_publishers = []
+        self.gripper_cmd_publishers = []
+
+        # Configurazione QoS per il publisher e il subscriber di robot action, per evitare code lunghe non-gestite ma prendere sempre ultimo msg (in teoria)
+        qos_profile = QoSProfile(
+        reliability=ReliabilityPolicy.RELIABLE,  # Garantisce la consegna dei messaggi
+        durability=DurabilityPolicy.VOLATILE,   # I messaggi non vengono conservati
+        depth=1                                 # Mantiene solo l'ultimo messaggio nella coda
+)
+
+        for topic in action_tcp_pose_topics:
+            self.tcp_pose_publishers.append(
+                self.create_publisher(PoseStamped, topic, qos_profile) 
+            )
+
+        
+        for topic in action_gripper_cmd_topics:
+            self.gripper_cmd_publishers.append(
+                self.create_publisher(Float64, topic, qos_profile)
+            )
+
         # Sottoscrizioni ai topic fissi
-        self.create_subscription(Float64, '/gripper_command', self.gripper_command_callback, 10)
+        self.create_subscription(Float64, '/mujoco_ros/gripper_actuator_state', self.gripper_actuator_callback, 10)
         self.create_subscription(PoseStamped, '/mujoco_ros/tcp_pose', self.tcp_pose_callback, 10)
         self.create_subscription(TwistStamped, '/mujoco_ros/tcp_velocity', self.tcp_velocity_callback, 10)
         self.create_subscription(WrenchStamped, '/force_torque_sensor_broadcaster_fake/wrench', self.tcp_force_torque_callback, 10)
+        
+        #  Sottoscrizione all'azione del robot pubblicata da gym
+        self.create_subscription(Float32MultiArray, 'gym_ros/robot_action', self.robot_action_callback, qos_profile)
 
         # Publisher per il messaggio custom Simulation_State
         self.state_publisher = self.create_publisher(SimulationState, 'mujoco_state', 10)
@@ -84,10 +121,9 @@ class StateBridgeNode(Node):
         def callback(msg):
             self.camera_images[index] = msg
         return callback
-
-    # Fixed Callbacks
-    def gripper_command_callback(self, msg):
-        self.gripper_command = msg
+    
+    def gripper_actuator_callback(self, msg):
+        self.gripper_act_state = msg
 
     def tcp_pose_callback(self, msg):
         self.tcp_pose = msg
@@ -98,9 +134,44 @@ class StateBridgeNode(Node):
     def tcp_force_torque_callback(self, msg):
         self.tcp_force_torque = msg
 
+    # Callback per il topic "gym_ros/robot_action"
+    def robot_action_callback(self, msg):
+        self.robot_action = msg
+        # self.get_logger().info(f"Azione ricevuta: {msg.data}") 
+        #  ( primi tre valori = traslazione asse x,y,z, quarto valore = ccontrollo del gripper)
+
+        translation = Float32MultiArray()
+        translation.data = msg.data[:3]  # Prendi i primi tre valori
+
+        new_action_pose = PoseStamped()
+        new_action_pose.header.stamp = self.get_clock().now().to_msg()
+        new_action_pose.header.frame_id = 'base_link'
+
+        new_action_pose.pose.position.x = self.tcp_pose.pose.position.x + translation.data[0]
+        new_action_pose.pose.position.y = self.tcp_pose.pose.position.y + translation.data[1]
+        new_action_pose.pose.position.z = self.tcp_pose.pose.position.z + translation.data[2]
+        new_action_pose.pose.orientation = self.tcp_pose.pose.orientation
+
+        # self.publisher.publish(new_pose)
+        self.get_logger().info(f" *** p Basletta: x={self.tcp_pose.pose.position.x}, y={self.tcp_pose.pose.position.y}, z={self.tcp_pose.pose.position.z}")
+        self.get_logger().info(f" ### pos pub: x={new_action_pose.pose.position.x}, y={new_action_pose.pose.position.y}, z={new_action_pose.pose.position.z}")
+        self.get_logger().info(f" +++ traslazione: x={translation.data[0]}, y={translation.data[1]}, z={translation.data[2]}")
+        self.get_logger().info(f"\n")
+
+        self.tcp_pose_publishers[0].publish(new_action_pose)
+
+        
+        # Quarto valore: comando del gripper
+        gripper_command = Float64()
+        # 255 (scegliere come gestire sto valore... 
+        # da pub ho messo che mandaa 0(-1) o 1 in teoria, ma a gripper devo mandare 0-255)
+        gripper_command.data = 239.0 if msg.data[3] == 1 else 0.0
+        self.gripper_cmd_publishers[0].publish(gripper_command)
+
     def publish_simulation_state(self):
+        
         state_msg = SimulationState()
-        state_msg.gripper_command = self.gripper_command
+        state_msg.gripper_command = self.gripper_act_state
         state_msg.obj_poses = self.obj_poses
         state_msg.obj_velocities = self.obj_velocities
         state_msg.tcp_pose = self.tcp_pose

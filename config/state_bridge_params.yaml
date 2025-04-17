@@ -1,14 +1,22 @@
 state_bridge_node:
   ros__parameters:
-    obj_pose_topics:
-      - "/mujoco_ros/obj1_pose"
-      # - "/mujoco_ros/obj2_pose"
-      # - "/mujoco_ros/obj3_pose"
-    obj_velocity_topics:
-      - "/mujoco_ros/obj1_velocity"
-      # - "/mujoco_ros/obj2_velocity"
-      # - "/mujoco_ros/obj3_velocity"
-    camera_topics:
-      - "/right_handcam/image/color"
-      # - "/left_handcam/image/color"
-      # - "/camera3/image_raw"
+    states:
+      obj_pose_topics:
+        - "/mujoco_ros/obj1_pose"
+        # - "/mujoco_ros/obj2_pose"
+        # - "/mujoco_ros/obj3_pose"
+      obj_velocity_topics:
+        - "/mujoco_ros/obj1_velocity"
+        # - "/mujoco_ros/obj2_velocity"
+        # - "/mujoco_ros/obj3_velocity"
+      camera_topics:
+        - "/mujoco_ros/right_handcam/image/color"
+        # - "/mujoco_ros/left_handcam/image/color"
+        # - "/mujoco_ros/camera3/image_raw"
+    actions:
+      tcp_pose_topics:
+        - "admittance_controller/target_pose"
+      gripper_cmd_topics:
+        - "mujoco_ros/gripper_command"
+  
+    
