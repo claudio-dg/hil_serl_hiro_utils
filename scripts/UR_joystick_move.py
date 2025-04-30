@@ -16,7 +16,7 @@ import time
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Vector3
 from std_msgs.msg import Float64
 
 ## per gripper (UR digital IO) service
@@ -269,7 +269,7 @@ class JoystickIntervention():
 
             if self.intervened: ### decommentare
                 #### decommenta per debug controllare inputs ###
-                print("[DEBUG] Expert action intervened. Values: \n X = ", self.expert_a[0], " Y = ", self.expert_a[1], " Z = ", self.expert_a[2], " RX = ", self.expert_a[3], " RY = ", self.expert_a[4], " Rz = ", self.expert_a[5]) #, "gripper = ", self.expert_a[6])  # Debug print             
+                print("[DEBUG] intervened. Values: X = ", self.expert_a[0], " Y = ", self.expert_a[1], " Z = ", self.expert_a[2], " RX = ", self.expert_a[3], " RY = ", self.expert_a[4], " Rz = ", self.expert_a[5]) #, "gripper = ", self.expert_a[6])  # Debug print             
                 # print("")
                 #return expert_a, True 
 
@@ -312,6 +312,10 @@ class AdmittanceControllerNode(Node):
         # pub al topic per controllare il gripper su MUJOCO
         self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
 
+
+        # **Nuovo publisher per gli offset**
+        self.offset_publisher = self.create_publisher(Vector3, 'controller_intervention_offset', 10)
+
         self.get_logger().info('Admittance Controller Node con joystick pronto.') 
 
     def pose_callback(self, msg):
@@ -342,9 +346,21 @@ class AdmittanceControllerNode(Node):
         new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
         new_pose.pose.orientation = self.current_pose.pose.orientation
 
-        self.publisher.publish(new_pose)
-        self.get_logger().info(f" ### Nuova posa pubblicata: x={new_pose.pose.position.x}, y={new_pose.pose.position.y}, z={new_pose.pose.position.z}")
+        # **Pubblica gli offset**
+        offset_msg = Vector3()
+        offset_msg.x = self.joystick.expert_a[0]
+        offset_msg.y = self.joystick.expert_a[1]
+        offset_msg.z = self.joystick.expert_a[2]
+        print("offset aggiunti = ", self.joystick.expert_a[0], self.joystick.expert_a[1], self.joystick.expert_a[2])
 
+        self.publisher.publish(new_pose)
+        # self.get_logger().info(f" ### Nuova posa pubblicata: x={new_pose.pose.position.x}, y={new_pose.pose.position.y}, z={new_pose.pose.position.z}")
+        self.offset_publisher.publish(offset_msg)
+        self.get_logger().info(f"*********** Offset pubblicato separatamente: x={offset_msg.x}, y={offset_msg.y}, z={offset_msg.z}")
+
+        
+         
+        ### ma come è possibile che sti valori siano diversi da quelli sopra???????????????????????????
      
 def main(args=None):
 
