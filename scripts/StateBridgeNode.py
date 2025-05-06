@@ -15,7 +15,7 @@ class StateBridgeNode(Node):
         super().__init__('sim_state_bridge_node')
 
         # Variabili per memorizzare i dati più recenti
-        # self.gripper_command = Float64()
+        self.gripper_command = Float64()
         self.gripper_act_state = Float64()
         self.obj_poses = []  # Array dinamico per le pose dei cubi
         self.obj_velocities = []  # Array dinamico per le velocità dei cubi
@@ -57,14 +57,14 @@ class StateBridgeNode(Node):
             )
 
         # Sub to the variable topics of cameras 
-        camera_topics = self.get_parameter('states.camera_topics').get_parameter_value().string_array_value
-        self.camera_subscriptions = []
+        # camera_topics = self.get_parameter('states.camera_topics').get_parameter_value().string_array_value
+        # self.camera_subscriptions = []
 
-        for topic in camera_topics:
-            self.camera_images.append(Image())
-            self.camera_subscriptions.append(
-                self.create_subscription(Image, topic, self.create_camera_callback(len(self.camera_images) - 1), 10)
-            )
+        # for topic in camera_topics:
+        #     self.camera_images.append(Image())
+        #     self.camera_subscriptions.append(
+        #         self.create_subscription(Image, topic, self.create_camera_callback(len(self.camera_images) - 1), 10)
+        #     )
 
         # Pub to the variable action topics from param file
         self.tcp_pose_publishers = []
@@ -117,10 +117,10 @@ class StateBridgeNode(Node):
         return callback
     
     # Dynamic Callbacks for cameras
-    def create_camera_callback(self, index):
-        def callback(msg):
-            self.camera_images[index] = msg
-        return callback
+    # def create_camera_callback(self, index):
+    #     def callback(msg):
+    #         self.camera_images[index] = msg
+    #     return callback
     
     def gripper_actuator_callback(self, msg):
         self.gripper_act_state = msg
@@ -153,21 +153,28 @@ class StateBridgeNode(Node):
         new_action_pose.pose.orientation = self.tcp_pose.pose.orientation
 
         # self.publisher.publish(new_pose)
-        self.get_logger().info(f" *** p Basletta: x={self.tcp_pose.pose.position.x}, y={self.tcp_pose.pose.position.y}, z={self.tcp_pose.pose.position.z}")
-        self.get_logger().info(f" ### pos pub: x={new_action_pose.pose.position.x}, y={new_action_pose.pose.position.y}, z={new_action_pose.pose.position.z}")
-        self.get_logger().info(f" +++ traslazione: x={translation.data[0]}, y={translation.data[1]}, z={translation.data[2]}")
-        self.get_logger().info(f"\n")
+        # self.get_logger().info(f" *** p Basletta: x={self.tcp_pose.pose.position.x}, y={self.tcp_pose.pose.position.y}, z={self.tcp_pose.pose.position.z}")
+        # self.get_logger().info(f" ### pos pub: x={new_action_pose.pose.position.x}, y={new_action_pose.pose.position.y}, z={new_action_pose.pose.position.z}")
+        # self.get_logger().info(f" +++ traslazione: x={translation.data[0]}, y={translation.data[1]}, z={translation.data[2]}")
+        # self.get_logger().info(f"\n")
 
         self.tcp_pose_publishers[0].publish(new_action_pose)
 
         
         # Quarto valore: comando del gripper
-        gripper_command = Float64()
-        # 255 (scegliere come gestire sto valore... 
-        # da pub ho messo che mandaa 0(-1) o 1 in teoria, ma a gripper devo mandare 0-255)
-        gripper_command.data = 239.0 if msg.data[3] == 1 else 0.0
-        self.gripper_cmd_publishers[0].publish(gripper_command)
-
+        self.gripper_command.data =  msg.data[3] 
+        
+        # Only publish if command is different from current gripper state 
+        if self.gripper_act_state.data != self.gripper_command.data:
+            self.get_logger().info(f"gripper ricevuto da BRIDGE!!  =  {self.gripper_command.data}")
+            self.gripper_cmd_publishers[0].publish(self.gripper_command)
+        else:
+            # self.get_logger().info("Comando gripper invariato, non pubblicato.")
+            pass
+        
+        # da sto print sembra esserci un delay importante tra quando premo e quando modifica il print, ma in realtà il robot su mujoco
+        # si muovr subito sincronizzato bene.. quindi direi problema di print e non di sincro reale
+        
     def publish_simulation_state(self):
         
         state_msg = SimulationState()
