@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""VERSIONE FUNZIONANTE X MUOVERE UR CON GAMEPAD XBOX"""
-# NOTA: questo nodo deve poi diventare un wrapper gym come quello originale per wrappare
-# poi l'env e aggiungere questa feature.. quindi bisogna cambiare struttura facendo vari metodi step action ecc..
-# guardare wrappers.py per capire come fare
-## aggiunta gestione del gripper tramite bumper sinistro e destro del gamepad
-# sia per simulazione MUJOCO che per caso reale con input IO UR
-
-
 from __future__ import print_function
 from dataclasses import dataclass
 from enum import Enum
@@ -58,6 +50,7 @@ class JoystickIntervention():
         
         self.service_client = service_client  # Inizializzare il client del servizio
         self.node = node  # Inizializzare il nodo
+        # self.lock = threading.Lock()  # Mutex per sincronizzare l'accesso a intervened
 
         self.gripper_enabled = True
         # if self.action_space.shape == (6,):
@@ -80,8 +73,6 @@ class JoystickIntervention():
         self.prev_left = False  # Stato precedente del pulsante BTN_TL per evitare esecuzione doppia comando (alla pressione a al rilascio)
         self.prev_right = False  # Stato precedente del pulsante BTN_TR
 
-        
-        
         # Start controller reading thread
         self.running = True
         self.thread = threading.Thread(target=self._read_gamepad)
@@ -136,27 +127,18 @@ class JoystickIntervention():
                         normalized_value = current_value / (resolution / 2) # fa diviso Res/2 perchè poi scala in modo da avere da  -TOT/2 a +TOT/2 anziche da 0 a TOT (una roba così)
                         scaled_value = normalized_value * self.controller_config.scale[code]
 
-                        # sti nomi ABS_Y HAT0X ecc sono mezzi a caso dati dal lettore del gamepad non da sto codice -- vedi my_inpuptGamepad
                         if code == 'ABS_Y': # su giu cursore (avanti indietro robot) indietro -0.1 avanti +0.1
-
                             self.x_axis =   scaled_value                            
-                            #print("1 cmd -- ABS Y = L3 UP_DOWN", code, self.x_axis)
 
                         elif code == 'ABS_X': # dx sx cursore.. destra max = -0.1 sx max = 0.1
-
                             self.y_axis =  scaled_value
-                            #print("2 cmd -- ABS X  = L3 RIGHT_LEFT ", code,  self.y_axis)
 
                         elif code == 'ABS_RZ': # grilleto DX (RT) 0=non premuto max = 0.4 premuto .. fa salire robot
-                            
                             self.z_axis = scaled_value
-                            #print("3 cmd -- ABS RZ = RT", code, self.z_axis)
 
                         elif code == 'ABS_Z': # grilleto LT max = -0.4 min 0
-                            
                             # Flip sign so this will go in the down direction
                             self.z_axis = -scaled_value
-                            #print("4  cmd -- ABS Z = LT", code, self.z_axis)
 
                         ### ignoro cursore destro
                         ### elif code == 'ABS_RX': # cursore R3 destra sinistra .. ma non mi sembra sia mappato al robot qua.. comunque da -0.3  a 0.3
@@ -192,8 +174,10 @@ class JoystickIntervention():
 
                         # ---------- OPEN GRIPPER CODE FOR MUJOCO SIMULATION ----------
 
-                        gripper_command.data = 0.0 # 0.0 = aperto
-                        self.node._mujoco_gripper_publisher.publish(gripper_command)
+                        gripper_command.data = 0.0 # 0.0 = OPEN
+                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
+                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on mujoco stepping through Gym
+                        
 
                         # ---------- OPEN GRIPPER CODE FOR MUJOCO SIMULATION ----------
 
@@ -215,8 +199,10 @@ class JoystickIntervention():
 
                         # ---------- CLOSE GRIPPER CODE FOR MUJOCO SIMULATION ----------
 
-                        gripper_command.data = 239.0 # 255.0 = chiuso
-                        self.node._mujoco_gripper_publisher.publish(gripper_command)
+                        gripper_command.data = 239.0 # 255.0 = CLOSED
+                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
+                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on mujoco stepping through Gym
+
 
                         # ---------- CLOSE GRIPPER CODE FOR MUJOCO SIMULATION ----------
 
@@ -227,11 +213,9 @@ class JoystickIntervention():
                 print("No controller found. Retrying...")
                 time.sleep(1)
 
-            #provo a mettere qua gestione/filtro dei comandi
-            # Get joystick action
+            # handle/filter commands
             deadzone = 0.03 #0.03
             self.expert_a = np.zeros(6)
-            #expert_a = np.zeros(6)
 
             self.expert_a[0] = self.x_axis if abs(self.x_axis) > deadzone else 0
             self.expert_a[1] = self.y_axis if abs(self.y_axis) > deadzone else 0
@@ -242,19 +226,20 @@ class JoystickIntervention():
             self.expert_a[4] = self.ry_axis if abs(self.ry_axis) > deadzone else 0
             self.expert_a[5] = self.rz_axis if abs(self.rz_axis) > deadzone else 0
 
-            self._reset_cmds()
 
+            # with self.lock:  # Proteggi l'accesso a self.intervened
             self.intervened = False
             if np.linalg.norm(self.expert_a) > 0.001 or self.left or self.right:
                 self.intervened = True
 
+            # self._reset_cmds() # L'ORIGINE DI TUTTI I MALI
+
+
             # print("------- INTERVENUTO VAR = ", self.intervened)
             if self.gripper_enabled:
                 if self.left:  # close gripper
-                    # gripper_action = np.random.uniform(-1, -0.9, size=(1,))
                     self.gripper_intervened = True
                 elif self.right:  # open gripper
-                    # gripper_action = np.random.uniform(0.9, 1, size=(1,))
                     self.gripper_intervened = True
                 # else:
                 #     gripper_action = np.zeros((1,))
@@ -263,14 +248,15 @@ class JoystickIntervention():
 
             if self.action_indices is not None:
                 filtered_expert_a = np.zeros_like(self.expert_a)
-                filtered_expert_a[self.action_indices] = self.expert_a[self.action_indices] # spiega a riga  468: specifica quali dimensioni considerare e quali no
+                filtered_expert_a[self.action_indices] = self.expert_a[self.action_indices] # specifica quali dimensioni considerare e quali no
                 # filtered_expert_a = expert_a[self.action_indices]
                 self.expert_a = filtered_expert_a
 
-            if self.intervened: ### decommentare
-                #### decommenta per debug controllare inputs ###
-                print("[DEBUG] intervened. Values: X = ", self.expert_a[0], " Y = ", self.expert_a[1], " Z = ", self.expert_a[2], " RX = ", self.expert_a[3], " RY = ", self.expert_a[4], " Rz = ", self.expert_a[5]) #, "gripper = ", self.expert_a[6])  # Debug print             
-                # print("")
+            # with self.lock: 
+            # if self.intervened: ### decommentare... NON RISOLTO: COMMENTANDO STO IF NON FUNZIONA (provato con lock ma peggiora ancora di più con lock, non funza nemmeno col print)
+            #     # print("[DEBUG] intervened. Values: X = ", self.expert_a[0], " Y = ", self.expert_a[1], " Z = ", self.expert_a[2], " RX = ", self.expert_a[3], " RY = ", self.expert_a[4], " Rz = ", self.expert_a[5]) #, "gripper = ", self.expert_a[6])  # Debug print             
+            #     print("")
+                # pass
                 #return expert_a, True 
 
     def call_set_io_service(self, pin, state):
@@ -294,26 +280,27 @@ class AdmittanceControllerNode(Node):
 
         self.current_pose = None
 
-        # IO_Gripper service client per muovere il Gripper su ROBOT REALE / su sim_Docker (per quello su mujoco uso publisher sotto)
+        ############# IO_Gripper service client to move Gripper on REAL ROBOT/sim_Docker #############
         service_client = self.create_client(ur_msgs.srv.SetIO, '/io_and_status_controller/set_io')
-        # COMMENTATO PER TEST SU SIMULAZIONE CHE NON HA TALE SERVIZIO #
         # while not service_client.wait_for_service(timeout_sec=1.0):
         #     self.get_logger().info('IO Service not available, waiting again...')
         # self.get_logger().info('IO Service client ready.')
-        self.joystick = JoystickIntervention(service_client=service_client, node=self)  # Passare il client al costruttore
+        self.joystick = JoystickIntervention(service_client=service_client, node=self)  # Pass client to constructor
+        ############# IO_Gripper service client to move Gripper on REAL ROBOT/sim_Docker #############
 
-     
         # sub al topic del robot per leggere pos attuale end effector
         self.subscription = self.create_subscription(PoseStamped,'/admittance_controller/w_T_ee',self.pose_callback,10) 
 
-        # pub al topic del controllore per inviare il goal desiderato (i.e. pos attuale + offset dato da input joystick)
-        self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10)
+        # pub al topic del controllore per inviare il goal desiderato DIRETTAMENTE(i.e. pos attuale + offset dato da input joystick)
+        # self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10) 
 
-        # pub al topic per controllare il gripper su MUJOCO
-        self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
+        # pub al topic per controllare il gripper su MUJOCO DIRETTAMENTE
+        # self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
 
+        # publisher to control the gripper indirectly on MUJOCO stepping through GYM
+        self._gym_gripper_publisher = self.create_publisher(Float64, 'controller_intervention_gripper', 10) 
 
-        # **Nuovo publisher per gli offset**
+        # publisher to control the tcp indirectly on MUJOCO stepping through GYM, only send offsets
         self.offset_publisher = self.create_publisher(Vector3, 'controller_intervention_offset', 10)
 
         self.get_logger().info('Admittance Controller Node con joystick pronto.') 
@@ -327,40 +314,43 @@ class AdmittanceControllerNode(Node):
         if self.current_pose is None:
             self.get_logger().warn("Nessuna posa corrente disponibile. Attendo aggiornamenti...")
             return
+        
+        # self.get_logger().info(' aaaaaaa') 
 
         if  self.joystick.gripper_intervened:
+            self.get_logger().info(' GRIPPER INTERVENED = TRUE') 
             self.joystick.gripper_intervened = False # reset flag
             return  # Non pubblicare pos nuove dell' end eff se comanda solo apertura/chiusura gripper    
 
         
+        # with self.joystick.lock:  # Proteggi l'accesso a self.joystick.intervened
         if not self.joystick.intervened:
             return  # Non pubblicare se non ci sono nuovi comandi
         
-        
-        new_pose = PoseStamped()
-        new_pose.header.stamp = self.get_clock().now().to_msg()
-        new_pose.header.frame_id = 'base_link'
+        #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+        # new_pose = PoseStamped()
+        # new_pose.header.stamp = self.get_clock().now().to_msg()
+        # new_pose.header.frame_id = 'base_link'
 
-        new_pose.pose.position.x = self.current_pose.pose.position.x + self.joystick.expert_a[0]
-        new_pose.pose.position.y = self.current_pose.pose.position.y + self.joystick.expert_a[1]
-        new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
-        new_pose.pose.orientation = self.current_pose.pose.orientation
+        # new_pose.pose.position.x = self.current_pose.pose.position.x + self.joystick.expert_a[0]
+        # new_pose.pose.position.y = self.current_pose.pose.position.y + self.joystick.expert_a[1]
+        # new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
+        # new_pose.pose.orientation = self.current_pose.pose.orientation
 
         # **Pubblica gli offset**
+        #  ## Provo a pubblicare SEMPRE commentando """"if not self.joystick.intervened:return,"""
+        # " in modo da pubblicare anche gli offset nulli (servono per la Demo credo)
         offset_msg = Vector3()
         offset_msg.x = self.joystick.expert_a[0]
         offset_msg.y = self.joystick.expert_a[1]
         offset_msg.z = self.joystick.expert_a[2]
         print("offset aggiunti = ", self.joystick.expert_a[0], self.joystick.expert_a[1], self.joystick.expert_a[2])
 
-        self.publisher.publish(new_pose)
+        # self.publisher.publish(new_pose) #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+
         # self.get_logger().info(f" ### Nuova posa pubblicata: x={new_pose.pose.position.x}, y={new_pose.pose.position.y}, z={new_pose.pose.position.z}")
         self.offset_publisher.publish(offset_msg)
         self.get_logger().info(f"*********** Offset pubblicato separatamente: x={offset_msg.x}, y={offset_msg.y}, z={offset_msg.z}")
-
-        
-         
-        ### ma come è possibile che sti valori siano diversi da quelli sopra???????????????????????????
      
 def main(args=None):
 
