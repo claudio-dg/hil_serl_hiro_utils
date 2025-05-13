@@ -17,6 +17,11 @@ class StateBridgeNode(Node):
         # Variabili per memorizzare i dati più recenti
         self.gripper_command = Float64()
         self.gripper_act_state = Float64()
+        ######
+        self.previous_gripper_command = Float64()  # Nuova variabile per memorizzare il comando precedente
+        self.previous_gripper_command.data = -1.0  # Inizializza con un valore impossibile (ad esempio, -1)
+        ######
+
         self.obj_poses = []  # Array dinamico per le pose dei cubi
         self.obj_velocities = []  # Array dinamico per le velocità dei cubi
         self.tcp_pose = PoseStamped()
@@ -57,14 +62,14 @@ class StateBridgeNode(Node):
             )
 
         # Sub to the variable topics of cameras 
-        # camera_topics = self.get_parameter('states.camera_topics').get_parameter_value().string_array_value
-        # self.camera_subscriptions = []
+        camera_topics = self.get_parameter('states.camera_topics').get_parameter_value().string_array_value
+        self.camera_subscriptions = []
 
-        # for topic in camera_topics:
-        #     self.camera_images.append(Image())
-        #     self.camera_subscriptions.append(
-        #         self.create_subscription(Image, topic, self.create_camera_callback(len(self.camera_images) - 1), 10)
-        #     )
+        for topic in camera_topics:
+            self.camera_images.append(Image())
+            self.camera_subscriptions.append(
+                self.create_subscription(Image, topic, self.create_camera_callback(len(self.camera_images) - 1), 10)
+            )
 
         # Pub to the variable action topics from param file
         self.tcp_pose_publishers = []
@@ -117,10 +122,10 @@ class StateBridgeNode(Node):
         return callback
     
     # Dynamic Callbacks for cameras
-    # def create_camera_callback(self, index):
-    #     def callback(msg):
-    #         self.camera_images[index] = msg
-    #     return callback
+    def create_camera_callback(self, index):
+        def callback(msg):
+            self.camera_images[index] = msg
+        return callback
     
     def gripper_actuator_callback(self, msg):
         self.gripper_act_state = msg
@@ -163,17 +168,19 @@ class StateBridgeNode(Node):
         
         # Quarto valore: comando del gripper
         self.gripper_command.data =  msg.data[3] 
-        
-        # Only publish if command is different from current gripper state 
-        if self.gripper_act_state.data != self.gripper_command.data:
+ 
+        # Confronta il comando ricevuto con il comando precedente
+        if self.gripper_command.data != self.previous_gripper_command.data:
+            # Aggiorna il comando precedente
+            self.previous_gripper_command.data = self.gripper_command.data
+
+            # Pubblica il nuovo comando
             self.get_logger().info(f"gripper ricevuto da BRIDGE!!  =  {self.gripper_command.data}")
             self.gripper_cmd_publishers[0].publish(self.gripper_command)
         else:
-            # self.get_logger().info("Comando gripper invariato, non pubblicato.")
+            # Comando invariato, non pubblicare
             pass
-        
-        # da sto print sembra esserci un delay importante tra quando premo e quando modifica il print, ma in realtà il robot su mujoco
-        # si muovr subito sincronizzato bene.. quindi direi problema di print e non di sincro reale
+
         
     def publish_simulation_state(self):
         
