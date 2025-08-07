@@ -19,6 +19,7 @@ find_package(std_msgs REQUIRED)
 # Configura la generazione di messaggi
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SimulationState.msg"
+  "msg/RealState.msg"
   DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
 
@@ -53,6 +54,7 @@ install(PROGRAMS
   scripts/V2_UR_joystick_move.py
   scripts/ForceBridgeNode.py
   scripts/StateBridgeNode.py
+  scripts/RealStateBridgeNode.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

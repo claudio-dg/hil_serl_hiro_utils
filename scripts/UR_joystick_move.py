@@ -36,28 +36,24 @@ class JoystickIntervention():
                 'ABS_HAT0X': 1.0,
             },
             scale={
-                'ABS_X': 0.1*9, ### x sim originale: 0.1 ___ x robot reale : 0.05
-                'ABS_Y': 0.1*9, ### x sim originale: 0.1 ___ x robot reale : 0.05
-                'ABS_RX': 0.3, ##non usato 
-                'ABS_RY': 0.3, ##non usato
-                'ABS_Z': 0.015*5, #### originale 0.05 --> modifico per UR --> movimenti esagerati asse z, provo a limitarli con valori più bassi --> 0.015
-                'ABS_RZ': 0.015*5, ## sim 0.015 .. reale abbasso un pelo a 0.013 forse? di più mi sa che poi funzion peggio prendendo un comando ogni 10 e pericoloso perchè robot si muove poi a improvviso & imprevedibile
+                'ABS_X': 0.1*9, 
+                'ABS_Y': 0.1*9, 
+                'ABS_RX': 0.3, ## ignored
+                'ABS_RY': 0.3, ## ignored
+                
+                # per training policy rlpd facio in modo di avere comandi tra -0.99 e 0.99 moltiplicando per 1.65 (prima erano tra -0.6 e 0.6 per motivo scritto sopra)
+                'ABS_Z': 0.015*5*1.65, 
+                'ABS_RZ': 0.015*5*1.65,
                 'ABS_HAT0X': 0.3,
             }
         ),
     }
     def __init__(self,  action_indices=None, controller_type=ControllerType.XBOX, service_client=None, node=None):
         
-        self.service_client = service_client  # Inizializzare il client del servizio
-        self.node = node  # Inizializzare il nodo
-        # self.lock = threading.Lock()  # Mutex per sincronizzare l'accesso a intervened
+        self.service_client = service_client  # gripper service client
+        self.node = node  
 
         self.gripper_enabled = True
-        # if self.action_space.shape == (6,):
-        #     self.gripper_enabled = False
-        # we can set action_indices to choose which action to intervene on
-        # e.g. action_indices=[0, 1, 2] will only intervene on the position control
-        self.action_indices = action_indices 
         self.controller_type = controller_type
         self.controller_config = self.CONTROLLER_CONFIGS[controller_type]
         
@@ -68,10 +64,10 @@ class JoystickIntervention():
         self.rx_axis = 0
         self.ry_axis = 0
         self.rz_axis = 0
-        self.left = False   # Left bumper for close gripper
-        self.right = False  # Right bumper for open gripper
-        self.prev_left = False  # Stato precedente del pulsante BTN_TL per evitare esecuzione doppia comando (alla pressione a al rilascio)
-        self.prev_right = False  # Stato precedente del pulsante BTN_TR
+        self.left = False   # Left bumper to close gripper
+        self.right = False  # Right bumper to open gripper
+        self.prev_left = False  
+        self.prev_right = False 
 
         # Start controller reading thread
         self.running = True
@@ -124,35 +120,34 @@ class JoystickIntervention():
                         # Normalize the joystick input values to range [-1, 1] expected by the environment
                         resolution = self.controller_config.resolution[code]
 
-                        normalized_value = current_value / (resolution / 2) # fa diviso Res/2 perchè poi scala in modo da avere da  -TOT/2 a +TOT/2 anziche da 0 a TOT (una roba così)
+                        normalized_value = current_value / (resolution / 2)
                         scaled_value = normalized_value * self.controller_config.scale[code]
 
-                        if code == 'ABS_Y': # su giu cursore (avanti indietro robot) indietro -0.1 avanti +0.1
+                        if code == 'ABS_Y': # su giu cursore 
                             self.x_axis =   scaled_value                            
 
-                        elif code == 'ABS_X': # dx sx cursore.. destra max = -0.1 sx max = 0.1
+                        elif code == 'ABS_X': # dx sx cursore
                             self.y_axis =  scaled_value
 
-                        elif code == 'ABS_RZ': # grilleto DX (RT) 0=non premuto max = 0.4 premuto .. fa salire robot
+                        elif code == 'ABS_RZ': # grilleto DX (RT)
                             self.z_axis = scaled_value
 
-                        elif code == 'ABS_Z': # grilleto LT max = -0.4 min 0
+                        elif code == 'ABS_Z': # grilleto SX (LT)
                             # Flip sign so this will go in the down direction
                             self.z_axis = -scaled_value
 
                         ### ignoro cursore destro
-                        ### elif code == 'ABS_RX': # cursore R3 destra sinistra .. ma non mi sembra sia mappato al robot qua.. comunque da -0.3  a 0.3
+                        # elif code == 'ABS_RX': # cursore R3 destra sinistra
                             #self.rx_axis = scaled_value
                             #print("5  cmd -- ABS RX R3", code, self.rx_axis)
 
-                        ### elif code == 'ABS_RY': # da -0.3 a 0.3
+                        # elif code == 'ABS_RY': # da -0.3 a 0.3
                             #self.ry_axis = scaled_value
                             #print("6  cmd -- ABS RY R3", code, self.ry_axis) 
 
                         elif code == 'ABS_HAT0X':
                             self.rz_axis = scaled_value
                             
-                        ###self.new_command = True  # Imposta il flag per nuovi comandi ############
                         # Reset counter after update
                         event_counter[code] = 0
 
@@ -160,28 +155,23 @@ class JoystickIntervention():
                 # Handle button events immediately
                 if 'BTN_TL' in latest_events:
                     self.left = bool(latest_events['BTN_TL'])
-                    if self.left and not self.prev_left:  # Esegui solo alla pressione
+                    if self.left and not self.prev_left:  # only execute at pression
                         self._reset_cmds()
                         print("\n LB --> OPEN GRIPPER", code, self.rz_axis)
 
                         ############ OPEN GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-                        
                         # if self.service_client:
                         #     self.call_set_io_service(7, 0.0)  # annulla altro
                         #     self.call_set_io_service(6, 1.0)  # Chiamare il servizio per aprire il gripper
 
-                        ############ OPEN GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-
-                        # ---------- OPEN GRIPPER CODE FOR MUJOCO SIMULATION ----------
-
                         gripper_command.data = 0.0 # 0.0 = OPEN
-                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
-                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on mujoco stepping through Gym
-                        
 
                         # ---------- OPEN GRIPPER CODE FOR MUJOCO SIMULATION ----------
+                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
 
-                    self.prev_left = self.left  # Aggiorna lo stato precedente
+                        # ---------- OPEN GRIPPER CODE FOR Real Robot Case ----------
+                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on Ros stepping through Gym
+
 
                 if 'BTN_TR' in latest_events:
                     self.right = bool(latest_events['BTN_TR'])
@@ -190,21 +180,19 @@ class JoystickIntervention():
                         print("\n RB --> CLOSE GRIPPER", code, self.rz_axis)
 
                         ############ CLOSE GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-
                         # if self.service_client:
                         #     self.call_set_io_service(6, 0.0)  # annulla altro
                         #     self.call_set_io_service(7, 1.0)  # Chiamare il servizio per chiudere il gripper
 
-                        ############ CLOSE GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-
-                        # ---------- CLOSE GRIPPER CODE FOR MUJOCO SIMULATION ----------
-
                         gripper_command.data = 239.0 # 255.0 = CLOSED
-                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
-                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on mujoco stepping through Gym
-
 
                         # ---------- CLOSE GRIPPER CODE FOR MUJOCO SIMULATION ----------
+                        # self.node._mujoco_gripper_publisher.publish(gripper_command) # to PUB directly on mujoco
+
+
+                        # ---------- CLOSE GRIPPER CODE FOR Real Robot Case ----------
+                        self.node._gym_gripper_publisher.publish(gripper_command) # to PUB INdirectly on ROS stepping through Gym
+
 
                     self.prev_right = self.right  # Aggiorna lo stato precedente
 
@@ -214,26 +202,23 @@ class JoystickIntervention():
                 time.sleep(1)
 
             # handle/filter commands
-            deadzone = 0.03 #0.03
+            deadzone = 0.1 
             self.expert_a = np.zeros(6)
 
             self.expert_a[0] = self.x_axis if abs(self.x_axis) > deadzone else 0
             self.expert_a[1] = self.y_axis if abs(self.y_axis) > deadzone else 0
             self.expert_a[2] = self.z_axis if abs(self.z_axis) > deadzone else 0
 
-            # Apply deadzone to rotation control -- ma non lin considera questi secondo me...
+            # Apply deadzone to rotation control -- Ignored
             self.expert_a[3] = self.rx_axis if abs(self.rx_axis) > deadzone else 0
             self.expert_a[4] = self.ry_axis if abs(self.ry_axis) > deadzone else 0
             self.expert_a[5] = self.rz_axis if abs(self.rz_axis) > deadzone else 0
 
-
-            # with self.lock:  # Proteggi l'accesso a self.intervened
             self.intervened = False
             if np.linalg.norm(self.expert_a) > 0.001 or self.left or self.right:
                 self.intervened = True
 
-            # self._reset_cmds() # L'ORIGINE DI TUTTI I MALI
-
+            # self._reset_cmds() # L'ORIGINE DI TUTTI I MALI: -->  ANCHE PER POLICY COMMENTO E AUMENTO DEADZONE A 0,1!!!
 
             # print("------- INTERVENUTO VAR = ", self.intervened)
             if self.gripper_enabled:
@@ -241,23 +226,11 @@ class JoystickIntervention():
                     self.gripper_intervened = True
                 elif self.right:  # open gripper
                     self.gripper_intervened = True
-                # else:
-                #     gripper_action = np.zeros((1,))
-                # self.expert_a = np.concatenate((self.expert_a, gripper_action), axis=0)
-                # expert_a[:6] += np.random.uniform(-0.5, 0.5, size=6)
 
-            if self.action_indices is not None:
-                filtered_expert_a = np.zeros_like(self.expert_a)
-                filtered_expert_a[self.action_indices] = self.expert_a[self.action_indices] # specifica quali dimensioni considerare e quali no
-                # filtered_expert_a = expert_a[self.action_indices]
-                self.expert_a = filtered_expert_a
+            if self.intervened: ### decommentare... (SOL dei MALI)
+                print("")
 
-            # with self.lock: 
-            # if self.intervened: ### decommentare... NON RISOLTO: COMMENTANDO STO IF NON FUNZIONA (provato con lock ma peggiora ancora di più con lock, non funza nemmeno col print)
-            #     # print("[DEBUG] intervened. Values: X = ", self.expert_a[0], " Y = ", self.expert_a[1], " Z = ", self.expert_a[2], " RX = ", self.expert_a[3], " RY = ", self.expert_a[4], " Rz = ", self.expert_a[5]) #, "gripper = ", self.expert_a[6])  # Debug print             
-            #     print("")
-                # pass
-                #return expert_a, True 
+            time.sleep(0.001)
 
     def call_set_io_service(self, pin, state):
         if not self.node:
@@ -280,29 +253,26 @@ class AdmittanceControllerNode(Node):
 
         self.current_pose = None
 
-        ############# IO_Gripper service client to move Gripper on REAL ROBOT/sim_Docker #############
+        # IO_Gripper service client to move Gripper on REAL ROBOT/sim_Docker 
         service_client = self.create_client(ur_msgs.srv.SetIO, '/io_and_status_controller/set_io')
-        # while not service_client.wait_for_service(timeout_sec=1.0):
-        #     self.get_logger().info('IO Service not available, waiting again...')
-        # self.get_logger().info('IO Service client ready.')
-        self.joystick = JoystickIntervention(service_client=service_client, node=self)  # Pass client to constructor
-        ############# IO_Gripper service client to move Gripper on REAL ROBOT/sim_Docker #############
+        # Pass client to Class constructor
+        self.joystick = JoystickIntervention(service_client=service_client, node=self)  
 
-        # sub al topic del robot per leggere pos attuale end effector
+        # Robot's Pose subscriber
         self.subscription = self.create_subscription(PoseStamped,'/admittance_controller/w_T_ee',self.pose_callback,10) 
 
-        # pub al topic del controllore per inviare il goal desiderato DIRETTAMENTE(i.e. pos attuale + offset dato da input joystick)
-        # self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10) 
-
-        # pub al topic per controllare il gripper su MUJOCO DIRETTAMENTE
-        # self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
-
-        # publisher to control the gripper indirectly on MUJOCO stepping through GYM
+        # publisher to control the gripper indirectly on ROS stepping through GYM
         self._gym_gripper_publisher = self.create_publisher(Float64, 'controller_intervention_gripper', 10) 
-
-        # publisher to control the tcp indirectly on MUJOCO stepping through GYM, only send offsets
+        # publisher to control the tcp indirectly on ROS stepping through GYM, only send offsets
         self.offset_publisher = self.create_publisher(Vector3, 'controller_intervention_offset', 10)
 
+        # pub al topic del controllore per inviare il goal desiderato DIRETTAMENTE(i.e. pos attuale + offset dato da input joystick)
+        # self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10)
+        # # pub al topic per controllare il gripper su MUJOCO DIRETTAMENTE
+        # self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
+
+        timer_period = 0.05  # seconds
+        self.pub_timer = self.create_timer(timer_period, self.check_and_publish_new_pose)
         self.get_logger().info('Admittance Controller Node con joystick pronto.') 
 
     def pose_callback(self, msg):
@@ -315,19 +285,15 @@ class AdmittanceControllerNode(Node):
             self.get_logger().warn("Nessuna posa corrente disponibile. Attendo aggiornamenti...")
             return
         
-        # self.get_logger().info(' aaaaaaa') 
-
         if  self.joystick.gripper_intervened:
             self.get_logger().info(' GRIPPER INTERVENED = TRUE') 
             self.joystick.gripper_intervened = False # reset flag
-            return  # Non pubblicare pos nuove dell' end eff se comanda solo apertura/chiusura gripper    
-
+            return  # don't publish tcp pose if only gripper is commanded    
         
-        # with self.joystick.lock:  # Proteggi l'accesso a self.joystick.intervened
         if not self.joystick.intervened:
-            return  # Non pubblicare se non ci sono nuovi comandi
+            return  
         
-        #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+        #### RIMUOVO PUBLISHER DIRETTO AL ROBOT
         # new_pose = PoseStamped()
         # new_pose.header.stamp = self.get_clock().now().to_msg()
         # new_pose.header.frame_id = 'base_link'
@@ -337,18 +303,14 @@ class AdmittanceControllerNode(Node):
         # new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
         # new_pose.pose.orientation = self.current_pose.pose.orientation
 
-        # **Pubblica gli offset**
-        #  ## Provo a pubblicare SEMPRE commentando """"if not self.joystick.intervened:return,"""
-        # " in modo da pubblicare anche gli offset nulli (servono per la Demo credo)
+        # self.publisher.publish(new_pose) #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+
         offset_msg = Vector3()
         offset_msg.x = self.joystick.expert_a[0]
         offset_msg.y = self.joystick.expert_a[1]
         offset_msg.z = self.joystick.expert_a[2]
         print("offset aggiunti = ", self.joystick.expert_a[0], self.joystick.expert_a[1], self.joystick.expert_a[2])
 
-        # self.publisher.publish(new_pose) #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
-
-        # self.get_logger().info(f" ### Nuova posa pubblicata: x={new_pose.pose.position.x}, y={new_pose.pose.position.y}, z={new_pose.pose.position.z}")
         self.offset_publisher.publish(offset_msg)
         self.get_logger().info(f"*********** Offset pubblicato separatamente: x={offset_msg.x}, y={offset_msg.y}, z={offset_msg.z}")
      
@@ -359,8 +321,7 @@ def main(args=None):
 
     try:
         while rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=0.1)
-            node.check_and_publish_new_pose()
+            rclpy.spin(node)
 
     except KeyboardInterrupt:
         node.get_logger().info("Interruzione da tastiera, arresto del nodo.")

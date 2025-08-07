@@ -10,9 +10,41 @@ from std_msgs.msg import Float32MultiArray
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
+##########
+import numpy as np
+import gymnasium as gym
+
+def print_green(x):
+    return print("\033[92m {}\033[00m".format(x))
+ 
+def print_orange(x):
+    return print("\033[93m {}\033[00m".format(x))
+##########
+
+
+
 class StateBridgeNode(Node):
     def __init__(self):
         super().__init__('sim_state_bridge_node')
+
+
+        ###############################################################
+        # CUBE_POSITION_FOR_LIMIT_BOX: np.ndarray = np.zeros((3,))
+        # CUBE_POSITION_FOR_LIMIT_BOX = Point(-0.5, -4.0, 0.3)  # Posizione del cubo per il calcolo dei limiti della box
+        # POSE_LIMIT_HIGH = np.zeros((3,))        
+        # POSE_LIMIT_LOW = np.zeros((3,))        
+        # CUBE_POSITION_FOR_LIMIT_BOX: np.ndarray = np.array((-0.5, -4.0, 0.3))
+        CUBE_POSITION = np.array([-0.5, 0.0, 0.4])
+        POSE_LIMIT_HIGH =  CUBE_POSITION + np.array([0.35, 0.35, 0.4])  # Limite superiore della box
+        POSE_LIMIT_LOW = CUBE_POSITION - np.array([0.35, 0.35, 0.025])  # Limite inferiore della box
+ 
+        # boundary box
+        self.xyz_bounding_box = gym.spaces.Box(
+            POSE_LIMIT_LOW[:3],
+            POSE_LIMIT_HIGH[:3],
+            dtype=np.float64,
+        )
+        ###############################################################
 
         # Variabili per memorizzare i dati più recenti
         self.gripper_command = Float64()
@@ -139,6 +171,18 @@ class StateBridgeNode(Node):
     def tcp_force_torque_callback(self, msg):
         self.tcp_force_torque = msg
 
+
+    ############################################################################
+    
+    def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
+        """Clip the pose to be within the safety box."""
+        pose[:3] = np.clip(
+            pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high
+        ) 
+        return pose
+    
+    ############################################################################
+
     # Callback per il topic "gym_ros/robot_action"
     def robot_action_callback(self, msg):
         self.robot_action = msg
@@ -157,6 +201,25 @@ class StateBridgeNode(Node):
         new_action_pose.pose.position.z = self.tcp_pose.pose.position.z + translation.data[2]
         new_action_pose.pose.orientation = self.tcp_pose.pose.orientation
 
+        # print_orange(f"\n  goal originale: {new_action_pose.pose.position.x}, {new_action_pose.pose.position.y}, {new_action_pose.pose.position.z}")
+ 
+        ############################################################################
+        ###################### PROVO QUI AGGIUNGERE BOX_CLIP #######################
+        clipped_position = self.clip_safety_box(
+            np.array([
+                new_action_pose.pose.position.x,
+                new_action_pose.pose.position.y,
+                new_action_pose.pose.position.z
+            ])
+        )
+        
+        # new_action_pose.pose.position.x = clipped_position[0]
+        # new_action_pose.pose.position.y = clipped_position[1]
+        # new_action_pose.pose.position.z = clipped_position[2]
+        # print_green(f" posa goal CLIPPATA: {new_action_pose.pose.position.x}, {new_action_pose.pose.position.y}, {new_action_pose.pose.position.z}")
+ 
+        ############################################################################
+        ############################################################################
         # self.publisher.publish(new_pose)
         # self.get_logger().info(f" *** p Basletta: x={self.tcp_pose.pose.position.x}, y={self.tcp_pose.pose.position.y}, z={self.tcp_pose.pose.position.z}")
         # self.get_logger().info(f" ### pos pub: x={new_action_pose.pose.position.x}, y={new_action_pose.pose.position.y}, z={new_action_pose.pose.position.z}")

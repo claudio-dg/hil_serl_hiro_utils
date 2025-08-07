@@ -15,6 +15,20 @@
   <depend>launch</depend>
   <depend>launch_ros</depend>
   
+  <!-- ######### -->
+  <depend>hardware_interface</depend>
+  <depend>controller_manager</depend>
+  <depend>control_toolbox</depend>
+  <depend>ur_msgs</depend>
+  <depend>ur_description</depend>
+  <depend>ur_robot_driver</depend>
+  <depend>ur_client_library</depend>
+  <depend>ros2_control</depend>
+
+  <depend>libcap_dev</depend>
+
+  <!-- ######### -->
+  
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   
