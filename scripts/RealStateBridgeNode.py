@@ -146,8 +146,8 @@ class RealStateBridgeNode(Node):
 
         ## reset gripper I/O 
         print_green("resetting gripper condtion to -> OPEN")
-        self.call_set_io_service(7, 0.0) 
-        self.call_set_io_service(6, 1.0)
+        self.call_set_io_service(7, 0.0) ## elettreovalvola --> solo output 7
+        # self.call_set_io_service(6, 1.0)
 
         response.success = True
         response.message = "Reset successful"
@@ -164,19 +164,32 @@ class RealStateBridgeNode(Node):
         closed = 239.0
         open =  0.0
 
+
+        ################## con elettrovalvola non è più così ma ho solo: output 7 ACCESO / SPENTO --> gripper CHIUSO / APERTO ##################
+        # for d_state in msg.digital_out_states:
+        #     if d_state.pin ==6:
+        #         pin_6_state = d_state.state
+        #     elif d_state.pin == 7:
+        #         pin_7_state = d_state.state
+
+        # # self.get_logger().info(f"Gripper actuator state: Pin 6: {pin_6_state}, Pin 7: {pin_7_state}")
+        # if pin_6_state and not pin_7_state:
+        #     self.gripper_act_state.data = open
+        # elif pin_7_state and not pin_6_state:
+        #     self.gripper_act_state.data = closed 
+        # else: # 6 == 7 -> Do nothing, keep last state (Open or Closed)
+        #     pass
+        ################## con elettrovalvola non è più così ma ho solo: output 7 ACCESO / SPENTO --> gripper CHIUSO / APERTO ##################
+        
+
         for d_state in msg.digital_out_states:
-            if d_state.pin ==6:
-                pin_6_state = d_state.state
-            elif d_state.pin == 7:
+            if d_state.pin ==7:
                 pin_7_state = d_state.state
 
-        # self.get_logger().info(f"Gripper actuator state: Pin 6: {pin_6_state}, Pin 7: {pin_7_state}")
-        if pin_6_state and not pin_7_state:
-            self.gripper_act_state.data = open
-        elif pin_7_state and not pin_6_state:
+        if pin_7_state:
             self.gripper_act_state.data = closed 
         else: # 6 == 7 -> Do nothing, keep last state (Open or Closed)
-            pass
+            self.gripper_act_state.data = open 
 
         self.get_logger().info(f"Gripper actuator state: {self.gripper_act_state}")
 
@@ -252,10 +265,10 @@ class RealStateBridgeNode(Node):
             if self.gripper_command.data == 0:
                 # Open the Gripper
                 self.call_set_io_service(7, 0.0) 
-                self.call_set_io_service(6, 1.0)
+                # self.call_set_io_service(6, 1.0) # elettrovalvola = solo output 7
             else: # ==239
                 # Close the Gripper
-                self.call_set_io_service(6, 0.0)
+                # self.call_set_io_service(6, 0.0) # elettrovalvola = solo output 7
                 self.call_set_io_service(7, 1.0)
         else:
             # Unchanged Command, Ignore
