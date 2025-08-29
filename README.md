@@ -35,7 +35,31 @@ The following table briefly introduces the content of each folder.
 ## Joypad Commands
 The following pictures show how to use the XBOX pad to move and/or rotate the UR end effector. In the scripts **(metterli in una sottocartella e linkarla, ma conviene farlo da qua o da vecow e ushare?)** you can adjust the following parameters to adjust the control to your need: increase the scale value to have faster movements, or decrease it to have slower and more accurate control of the robot
 ```bash
-Inserire Code snippet da vecow qui
+    CONTROLLER_CONFIGS = {
+        ControllerType.XBOX: ControllerConfig(
+            # XBOX controller joystick values have 16 bit resolution [0, 65535]
+            resolution={
+                'ABS_X': 2**16,
+                'ABS_Y': 2**16,
+                'ABS_RX': 2**16,
+                'ABS_RY': 2**16,
+                'ABS_Z': 2**8,
+                'ABS_RZ': 2**8,
+                'ABS_HAT0X': 1.0,
+            },
+            scale={
+                'ABS_X': 0.1*screw_case_scale_xyz, 
+                'ABS_Y': 0.1*screw_case_scale_xyz, 
+                'ABS_RX': 0.3, ## ignored
+                'ABS_RY': 0.3, ## ignored
+                
+
+                'ABS_Z': 0.015*5*screw_case_scale_Z_RZ, 
+                'ABS_RZ': 0.015*5*screw_case_scale_Z_RZ,
+                'ABS_HAT0X': 0.3,
+            }
+        ),
+    }
 ```
 
 UR_joystick_move: only translational movement
