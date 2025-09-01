@@ -1,4 +1,4 @@
-HIRO-HI-SERL-Utils Package
+HIL-SERL-HIRO-Utils Package
 ================================
 This repository contains a set of libraries and utils for the HIRO HIL-SERL implementation that you can find at this link: [hil-serl-hiro](https://github.com/claudio-dg/hil-serl-hiro/tree/hiro_simulation).
 The main goal of these libraries is that of permitting a proper data exchange between Gym's environment and its robot counterpart, both for simulation case (i.e. with Mujoco) and both for the real UR case.
