@@ -10,7 +10,7 @@ Table of contents
 
 * [Repository structure](#repository-structure)
 * [Joypad Commands](#joypad-commands)
-* [Limitations and Possible Improvements](#limitations-and-possible-improvements)
+<!-- * [Limitations and Possible Improvements](#limitations-and-possible-improvements) -->
 
 
 ## Repository structure
@@ -62,13 +62,13 @@ The following pictures show how to use the XBOX pad to move and/or rotate the UR
     }
 ```
 
-UR_joystick_move: only translational movement
+UR_joystick_move.py: only translational movement
 ====================================================================
 <p align="center">
   <img src="https://github.com/claudio-dg/hil-serl-hiro/blob/hiro_simulation/docs/images/joystick.png" width="550">
 </p>
 
-XXX_Rotation: include end effector rotational movement
+UR_joystick_wRotation_move.py: include end effector rotational movement
 ====================================================================
 <p align="center">
   <img src="https://github.com/claudio-dg/hil-serl-hiro/blob/hiro_simulation/docs/images/joystick_2.png" width="550">

@@ -48,9 +48,9 @@ install(DIRECTORY
 
 # Installa gli script Python come eseguibili
 install(PROGRAMS
-  scripts/get_gamepad_input.py 
-  scripts/UR_joystick_move.py 
-  scripts/UR_joystick_wRotation_move.py
+  scripts/Xbox_controller/get_gamepad_input.py 
+  scripts/Xbox_controller/UR_joystick_move.py 
+  scripts/Xbox_controller/UR_joystick_wRotation_move.py
   scripts/ForceBridgeNode.py
   scripts/StateBridgeNode.py
   scripts/RealStateBridgeNode.py
