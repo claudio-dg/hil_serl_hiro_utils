@@ -1,8 +1,8 @@
-my_cpp_py_pkg (turn into HIRO-HIL-SERL-Utils)
+HIRO-HI-SERL-Utils Package
 ================================
 This repository contains a set of libraries and utils for the HIRO HIL-SERL implementation that you can find at this link: [hil-serl-hiro](https://github.com/claudio-dg/hil-serl-hiro/tree/hiro_simulation).
 The main goal of these libraries is that of permitting a proper data exchange between Gym's environment and its robot counterpart, both for simulation case (i.e. with Mujoco) and both for the real UR case.
-Moreover, here you can find the scripts to control the robot by using an XBOX joypad
+Moreover, here you can find the scripts to control the robot by using an XBOX joypad.
 
 
 Table of contents
@@ -29,11 +29,11 @@ The following table briefly introduces the content of each folder.
 | [scripts.**ForceBridgeNode.py**](https://github.com/claudio-dg/my_cpp_py_pkg/blob/master/scripts/ForceBridgeNode.py) | Script to bridge the simulation force from ```Mujoco``` to ```Gym``` |
 | [scripts.**StateBridgeNode.py**](https://github.com/claudio-dg/my_cpp_py_pkg/blob/master/scripts/StateBridgeNode.py)|  Script to bridge data between ```Mujoco``` and ```Gym's``` environments|
 | [scripts.**RealStateBridgeNode.py**](https://github.com/claudio-dg/my_cpp_py_pkg/blob/master/scripts/RealStateBridgeNode.py) | Script to bridge data between the real robot and ```Gym's``` environment |
-| [scripts.**UR_joystick_move.py**](https://github.com/claudio-dg/my_cpp_py_pkg/blob/master/scripts/UR_joystick_move.py) | Code to collect input from joystick and send them to the Bridge or directly to the Robot |
+| [scripts.**Xbox_controller**](https://github.com/claudio-dg/hil_serl_hiro_utils/blob/master/scripts/Xbox_controller) | Code to collect input from joystick and send them to the Bridge or directly to the Robot |
 
 
 ## Joypad Commands
-The following pictures show how to use the XBOX pad to move and/or rotate the UR end effector. In the scripts **(metterli in una sottocartella e linkarla, ma conviene farlo da qua o da vecow e ushare?)** you can adjust the following parameters to adjust the control to your need: increase the scale value to have faster movements, or decrease it to have slower and more accurate control of the robot
+The following pictures show how to use the XBOX pad to move and/or rotate the UR end effector. In the [scripts](https://github.com/claudio-dg/hil_serl_hiro_utils/tree/master/scripts/Xbox_controller) you can adjust the following parameters to adjust the control to your needs: increase the scale value to have faster movements, or decrease it to have slower and more accurate control of the robot
 ```bash
     CONTROLLER_CONFIGS = {
         ControllerType.XBOX: ControllerConfig(
