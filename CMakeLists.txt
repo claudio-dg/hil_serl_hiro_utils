@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(my_cpp_py_pkg)
+project(hil_serl_hiro_utils)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -49,9 +49,8 @@ install(DIRECTORY
 # Installa gli script Python come eseguibili
 install(PROGRAMS
   scripts/get_gamepad_input.py 
-  scripts/joystick_pub_test.py 
   scripts/UR_joystick_move.py 
-  scripts/V2_UR_joystick_move.py
+  scripts/UR_joystick_wRotation_move.py
   scripts/ForceBridgeNode.py
   scripts/StateBridgeNode.py
   scripts/RealStateBridgeNode.py

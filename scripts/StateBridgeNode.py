@@ -5,7 +5,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
 from sensor_msgs.msg import Image
-from my_cpp_py_pkg.msg import SimulationState  # Custom message
+from hil_serl_hiro_utils.msg import SimulationState  # Custom message
 from std_msgs.msg import Float32MultiArray
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy

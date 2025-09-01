@@ -14,6 +14,26 @@ from std_msgs.msg import Float64
 ## per gripper (UR digital IO) service
 import ur_msgs.srv
 
+##################################################################
+import tf_transformations
+
+def quat_to_euler(q):
+    return tf_transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+
+def euler_to_quat(roll, pitch, yaw):
+    q = tf_transformations.quaternion_from_euler(roll, pitch, yaw)
+    return q  # [x, y, z, w]
+##################################################################
+
+def print_green(x):
+    return print("\033[92m {}\033[00m".format(x))
+ 
+def print_orange(x):
+    return print("\033[93m {}\033[00m".format(x))
+ 
+def print_blu(x):
+    return print("\033[94m {}\033[00m".format(x))
+
 class ControllerType(Enum):
     XBOX = "xbox"
 
@@ -21,14 +41,6 @@ class ControllerType(Enum):
 class ControllerConfig:
     resolution: dict
     scale: dict
-
-
-cube_case_scale_xyz = 9
-# per training policy rlpd facio in modo di avere comandi tra -0.99 e 0.99 moltiplicando per 1.65 (prima erano tra -0.6 e 0.6 per motivo scritto sopra)
-cube_case_scale_Z_RZ =1.65
-
-screw_case_scale_xyz = 2
-screw_case_scale_Z_RZ = 0.3
 
 class JoystickIntervention():
     CONTROLLER_CONFIGS = {
@@ -42,17 +54,23 @@ class JoystickIntervention():
                 'ABS_Z': 2**8,
                 'ABS_RZ': 2**8,
                 'ABS_HAT0X': 1.0,
+
+                'BTN_EAST' : 1.0,
+                'BTN_NORTH' : 1.0,
             },
             scale={
-                'ABS_X': 0.1*screw_case_scale_xyz, 
-                'ABS_Y': 0.1*screw_case_scale_xyz, 
-                'ABS_RX': 0.3, ## ignored
-                'ABS_RY': 0.3, ## ignored
+                'ABS_X': 0.1*3, #9, 
+                'ABS_Y': 0.1*3, #9, 
+                'ABS_RX': 0.3*3, ## rotation
+                'ABS_RY': 0.3*3, ## rotation
                 
                 # per training policy rlpd facio in modo di avere comandi tra -0.99 e 0.99 moltiplicando per 1.65 (prima erano tra -0.6 e 0.6 per motivo scritto sopra)
-                'ABS_Z': 0.015*5*screw_case_scale_Z_RZ, 
-                'ABS_RZ': 0.015*5*screw_case_scale_Z_RZ,
+                'ABS_Z': 0.015*2*1.65, # *5*1.65
+                'ABS_RZ': 0.015*2*1.65, #*5*1.65
                 'ABS_HAT0X': 0.3,
+
+                'BTN_EAST' : 0.3*3,
+                'BTN_NORTH' : 0.3*3,
             }
         ),
     }
@@ -77,6 +95,9 @@ class JoystickIntervention():
         self.prev_left = False  
         self.prev_right = False 
 
+        self.tcpRot_Z = 0
+
+
         # Start controller reading thread
         self.running = True
         self.thread = threading.Thread(target=self._read_gamepad)
@@ -94,9 +115,11 @@ class JoystickIntervention():
         self.rx_axis = 0
         self.ry_axis = 0
         self.rz_axis = 0
-    
+
+        self.tcpRot_Z = 0
+
     def _read_gamepad(self):
-        useful_codes = ['ABS_X', 'ABS_Y', 'ABS_RX', 'ABS_RY', 'ABS_Z', 'ABS_RZ', 'ABS_HAT0X']
+        useful_codes = ['ABS_X', 'ABS_Y', 'ABS_RX', 'ABS_RY', 'ABS_Z', 'ABS_RZ', 'ABS_HAT0X' , 'BTN_EAST' , 'BTN_NORTH']
         
         # Store consecutive event counters and values
         event_counter = {
@@ -107,6 +130,9 @@ class JoystickIntervention():
             'ABS_Z': 0,
             'ABS_RZ': 0,
             'ABS_HAT0X': 0,
+
+            'BTN_EAST': 0,
+            'BTN_NORTH': 0,
         }
     
         while self.running:
@@ -145,16 +171,21 @@ class JoystickIntervention():
                             self.z_axis = -scaled_value
 
                         ### ignoro cursore destro
-                        # elif code == 'ABS_RX': # cursore R3 destra sinistra
-                            #self.rx_axis = scaled_value
-                            #print("5  cmd -- ABS RX R3", code, self.rx_axis)
+                        elif code == 'ABS_RX': # cursore R3 destra sinistra
+                            self.rx_axis = scaled_value
+                            print("5  cmd -- ABS RX R3", code, self.rx_axis)
 
-                        # elif code == 'ABS_RY': # da -0.3 a 0.3
-                            #self.ry_axis = scaled_value
-                            #print("6  cmd -- ABS RY R3", code, self.ry_axis) 
+                        elif code == 'ABS_RY': # da -0.3 a 0.3
+                            self.ry_axis = scaled_value
+                            print("6  cmd -- ABS RY R3", code, self.ry_axis) 
 
                         elif code == 'ABS_HAT0X':
                             self.rz_axis = scaled_value
+
+                        elif code == 'BTN_EAST':
+                            self.tcpRot_Z = scaled_value
+                        elif code == 'BTN_NORTH':
+                            self.tcpRot_Z = -scaled_value
                             
                         # Reset counter after update
                         event_counter[code] = 0
@@ -168,9 +199,9 @@ class JoystickIntervention():
                         print("\n LB --> OPEN GRIPPER", code, self.rz_axis)
 
                         ############ OPEN GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-                        # if self.service_client:
-                        #     self.call_set_io_service(7, 0.0)  # annulla altro
-                        #     self.call_set_io_service(6, 1.0)  # Chiamare il servizio per aprire il gripper
+                        if self.service_client:
+                            self.call_set_io_service(7, 0.0)  # annulla altro
+                            # self.call_set_io_service(6, 1.0)  # Chiamare il servizio per aprire il gripper
 
                         gripper_command.data = 0.0 # 0.0 = OPEN
 
@@ -188,9 +219,9 @@ class JoystickIntervention():
                         print("\n RB --> CLOSE GRIPPER", code, self.rz_axis)
 
                         ############ CLOSE GRIPPER CODE FOR  REAL ROBOT & URSIM ############
-                        # if self.service_client:
+                        if self.service_client:
                         #     self.call_set_io_service(6, 0.0)  # annulla altro
-                        #     self.call_set_io_service(7, 1.0)  # Chiamare il servizio per chiudere il gripper
+                            self.call_set_io_service(7, 1.0)  # Chiamare il servizio per chiudere il gripper
 
                         gripper_command.data = 239.0 # 255.0 = CLOSED
 
@@ -217,10 +248,10 @@ class JoystickIntervention():
             self.expert_a[1] = self.y_axis if abs(self.y_axis) > deadzone else 0
             self.expert_a[2] = self.z_axis if abs(self.z_axis) > deadzone else 0
 
-            # Apply deadzone to rotation control -- Ignored
+            # Apply deadzone to rotation control -- QUI IGNORO RTUTTI TRANNE RX, e RY? PROVO
             self.expert_a[3] = self.rx_axis if abs(self.rx_axis) > deadzone else 0
             self.expert_a[4] = self.ry_axis if abs(self.ry_axis) > deadzone else 0
-            self.expert_a[5] = self.rz_axis if abs(self.rz_axis) > deadzone else 0
+            self.expert_a[5] = self.tcpRot_Z if abs(self.tcpRot_Z) > deadzone else 0
 
             self.intervened = False
             if np.linalg.norm(self.expert_a) > 0.001 or self.left or self.right:
@@ -249,11 +280,11 @@ class JoystickIntervention():
         request.pin = pin
         request.state = state
         future = self.service_client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future)
-        if future.result() is not None:
-            print(f"Service call succeeded: {future.result()}")
-        else:
-            print(f"Service call failed: {future.exception()}")
+        # rclpy.spin_until_future_complete(self.node, future) # decommentare
+        # if future.result() is not None:
+        #     print(f"Service call succeeded: {future.result()}")
+        # else:
+        #     print(f"Service call failed: {future.exception()}")
 
 class AdmittanceControllerNode(Node): 
     def __init__(self):
@@ -275,7 +306,7 @@ class AdmittanceControllerNode(Node):
         self.offset_publisher = self.create_publisher(Vector3, 'controller_intervention_offset', 10)
 
         # pub al topic del controllore per inviare il goal desiderato DIRETTAMENTE(i.e. pos attuale + offset dato da input joystick)
-        # self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10)
+        self.publisher = self.create_publisher(PoseStamped, '/admittance_controller/target_pose', 10)
         # # pub al topic per controllare il gripper su MUJOCO DIRETTAMENTE
         # self._mujoco_gripper_publisher = self.create_publisher(Float64, 'mujoco_ros/gripper_command', 10) 
 
@@ -302,26 +333,92 @@ class AdmittanceControllerNode(Node):
             return  
         
         #### RIMUOVO PUBLISHER DIRETTO AL ROBOT
-        # new_pose = PoseStamped()
-        # new_pose.header.stamp = self.get_clock().now().to_msg()
-        # new_pose.header.frame_id = 'base_link'
+        new_pose = PoseStamped()
+        new_pose.header.stamp = self.get_clock().now().to_msg()
+        new_pose.header.frame_id = 'base_link'
 
-        # new_pose.pose.position.x = self.current_pose.pose.position.x + self.joystick.expert_a[0]
-        # new_pose.pose.position.y = self.current_pose.pose.position.y + self.joystick.expert_a[1]
-        # new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
-        # new_pose.pose.orientation = self.current_pose.pose.orientation
+        new_pose.pose.position.x = self.current_pose.pose.position.x + self.joystick.expert_a[0]
+        new_pose.pose.position.y = self.current_pose.pose.position.y + self.joystick.expert_a[1]
+        new_pose.pose.position.z = self.current_pose.pose.position.z + self.joystick.expert_a[2]
+        ## provo add RX qui.. ma quaternioni è un casino.... conversione in EUler e Back to quaternioni?? mh..
+        ######
+        # new_pose.pose.orientation.x = self.current_pose.pose.orientation.x + self.joystick.expert_a[3] # mettere qua e provare rotazione come gestire quaternione euler ecc
+        # new_pose.pose.orientation.y = self.current_pose.pose.orientation.y # + self.joystick.expert_a[4]
+        # new_pose.pose.orientation.z = self.current_pose.pose.orientation.z + self.joystick.expert_a[4]
+        # new_pose.pose.orientation.w = self.current_pose.pose.orientation.w
+        ######
 
-        # self.publisher.publish(new_pose) #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+        # TEST QUATERNIONI --> EULER --> ADD OFFSET --> Bach to quaternioni
+        # 1. Estrai il quaternione attuale
+        q = self.current_pose.pose.orientation
+        curr_roll,curr_pitch, curr_yaw = quat_to_euler(q)
 
-        offset_msg = Vector3()
-        offset_msg.x = self.joystick.expert_a[0]
-        offset_msg.y = self.joystick.expert_a[1]
-        offset_msg.z = self.joystick.expert_a[2]
-        print("offset aggiunti = ", self.joystick.expert_a[0], self.joystick.expert_a[1], self.joystick.expert_a[2])
+        # 2. Applica gli offset dal joystick
+        curr_roll += self.joystick.expert_a[4]  # oppure ry_axis, dipende da come vuoi mappare
+        curr_pitch += self.joystick.expert_a[3]
+        curr_yaw += self.joystick.expert_a[5]
 
-        self.offset_publisher.publish(offset_msg)
-        self.get_logger().info(f"*********** Offset pubblicato separatamente: x={offset_msg.x}, y={offset_msg.y}, z={offset_msg.z}")
-     
+
+        ######################################################################################################
+        ################################################ PROVO CLIP ##########################################
+        # roll_range = (-2.9, 2.9)      
+        pitch_range = (-0.15, 0.15)      
+        yaw_range = (1.47, 1.59)           
+        
+        print_orange(f" teorica ROLL = {curr_roll},\nPITCH =  {curr_pitch}\nYAW = {curr_yaw}")
+
+        # 2. Clippa gli angoli
+        # curr_roll = np.clip(curr_roll, roll_range[0], roll_range[1])
+        curr_pitch = np.clip(curr_pitch, pitch_range[0], pitch_range[1])
+        curr_yaw = np.clip(curr_yaw, yaw_range[0], yaw_range[1])
+
+        # print_green(f"CLIPPATA ROLL = {curr_roll},\nPITCH =  {curr_pitch}\nYAW = {curr_yaw}")
+
+        roll_center = -3.12  # oppure il valore iniziale
+        roll_width = 0.30      # ampiezza totale del range consentito (in radianti) 30 --> +15 & -15
+        curr_roll = clip_angle_periodic(curr_roll, roll_center, roll_width)
+
+        print_blu(f"CLIPPATO ROLL = {curr_roll},")
+        ######################################################################################################
+        ######################################################################################################
+
+        # 3. Converti di nuovo in quaternione
+        new_q = euler_to_quat(curr_roll, curr_pitch, curr_yaw)
+
+        # 4. Assegna alla nuova pose
+        new_pose.pose.orientation.x = new_q[0]
+        new_pose.pose.orientation.y = new_q[1]
+        new_pose.pose.orientation.z = new_q[2]
+        new_pose.pose.orientation.w = new_q[3]
+
+        self.publisher.publish(new_pose) #### RIMUOVO PUBLISHER DIRETTO AL ROBOT --> nel caso di Demo pubblica già Gym e non serve doppio publisher
+
+        #  per PUBLISHER **NON** diretto al robot
+        # offset_msg = Vector3()
+        # offset_msg.x = self.joystick.expert_a[0]
+        # offset_msg.y = self.joystick.expert_a[1]
+        # offset_msg.z = self.joystick.expert_a[2]
+        # print("offset aggiunti = ", self.joystick.expert_a[0], self.joystick.expert_a[1], self.joystick.expert_a[2])
+
+        # self.offset_publisher.publish(offset_msg)
+        # self.get_logger().info(f"*********** Offset pubblicato separatamente: x={offset_msg.x}, y={offset_msg.y}, z={offset_msg.z}")
+
+######################################################################################################
+################################################ PROVO CLIP ##########################################
+        # problema roll che passa da -3.11 a +3.11 impossibile da clippare. con queste 2 funz sembra funzionare
+        # nota: con config diversa gli altri angoli potrebbero avere lo stesso problema
+def normalize_angle(angle):
+    """Porta un angolo in radianti nel range [-pi, pi]."""
+    return (angle + np.pi) % (2 * np.pi) - np.pi
+
+def clip_angle_periodic(angle, center, width):
+    angle = normalize_angle(angle - center)
+    half_width = width / 2
+    angle = np.clip(angle, -half_width, half_width)
+    return normalize_angle(angle + center)
+######################################################################################################
+################################################ PROVO CLIP ##########################################
+        
 def main(args=None):
 
     rclpy.init(args=args)

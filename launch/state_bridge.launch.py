@@ -6,14 +6,14 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     # Percorso dinamico al file YAML
     params_file = PathJoinSubstitution([
-        FindPackageShare("my_cpp_py_pkg"),
+        FindPackageShare("hil_serl_hiro_utils"),
         "config",
         "state_bridge_params.yaml"
     ])
 
     # Nodo StateBridgeNode
     state_bridge_node = Node(
-        package="my_cpp_py_pkg",
+        package="hil_serl_hiro_utils",
         executable="StateBridgeNode.py",
         name="state_bridge_node",
         parameters=[params_file],

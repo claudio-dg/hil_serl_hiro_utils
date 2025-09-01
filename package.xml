@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>my_cpp_py_pkg</name>
+  <name>hil_serl_hiro_utils</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="cdg9914@gmail.com">claudiodelgaizo</maintainer>

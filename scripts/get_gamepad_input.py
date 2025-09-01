@@ -14,6 +14,17 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 
+
+def print_green(x):
+    return print("\033[92m {}\033[00m".format(x))
+
+def print_blue(x):
+    return print("\033[95m {}\033[00m".format(x))
+
+def print_boh(x):
+    return print("\033[96m {}\033[00m".format(x))
+
+
 class ControllerType(Enum):
     XBOX = "xbox"
 
@@ -34,6 +45,9 @@ class JoystickIntervention():
                 'ABS_Z': 2**8,
                 'ABS_RZ': 2**8,
                 'ABS_HAT0X': 1.0,
+
+                'BTN_EAST' : 1.0,
+                'BTN_NORTH' : 1.0,
             },
             scale={
                 'ABS_X': -0.1,
@@ -43,6 +57,9 @@ class JoystickIntervention():
                 'ABS_Z': 0.05,
                 'ABS_RZ': 0.05,
                 'ABS_HAT0X': 0.3,
+
+                'BTN_EAST' : 0.3,
+                'BTN_NORTH' : 0.3,
             }
         ),
     }
@@ -66,6 +83,9 @@ class JoystickIntervention():
         self.rz_axis = 0
         self.left = False   # Left bumper for close gripper
         self.right = False  # Right bumper for open gripper
+
+        self.tcpRot = 0
+        # self.X = False
         
         # Start controller reading thread
         self.running = True
@@ -80,9 +100,14 @@ class JoystickIntervention():
         self.rx_axis = 0
         self.ry_axis = 0
         self.rz_axis = 0
+
+        # self.B = False
+        # self.X = False
+        self.tcpRot = 0
+
     
     def _read_gamepad(self):
-        useful_codes = ['ABS_X', 'ABS_Y', 'ABS_RX', 'ABS_RY', 'ABS_Z', 'ABS_RZ', 'ABS_HAT0X']
+        useful_codes = ['ABS_X', 'ABS_Y', 'ABS_RX', 'ABS_RY', 'ABS_Z', 'ABS_RZ', 'ABS_HAT0X' , 'BTN_EAST' , 'BTN_NORTH']
         
         # Store consecutive event counters and values
         event_counter = {
@@ -93,6 +118,10 @@ class JoystickIntervention():
             'ABS_Z': 0,
             'ABS_RZ': 0,
             'ABS_HAT0X': 0,
+
+            'BTN_EAST': 0,
+            'BTN_NORTH': 0,
+
         }
     
         while self.running:
@@ -102,6 +131,9 @@ class JoystickIntervention():
                 latest_events = {}
                 for event in events:
                     latest_events[event.code] = event.state
+                    print_blue(f" °°°° {event.code}") # B= BTN_EAST ---- X = BTN_NORTH
+                    print_green(f" state {event.state}") # B= BTN_EAST ---- X = BTN_NORTH
+
                 # Process events
                 for code in useful_codes:
                     if code in latest_events:
@@ -147,6 +179,16 @@ class JoystickIntervention():
 
                         elif code == 'ABS_HAT0X':
                             self.rz_axis = scaled_value
+                            #print("777 cmd -- ABS HATOX", code, self.rz_axis) # nscoperto dovrebbe essere freccia sx però in BTN printa code = HATOX.. quindi c'è qualche imprecisione di codice ma hatox è RB o LB
+                        
+                        elif code == 'BTN_EAST':
+                            self.tcpRot = scaled_value
+                            #print("777 cmd -- ABS HATOX", code, self.rz_axis) # nscoperto dovrebbe essere freccia sx però in BTN printa code = HATOX.. quindi c'è qualche imprecisione di codice ma hatox è RB o LB
+                            print_boh(f" tcp ROT = {self.tcpRot}")
+                        elif code == 'BTN_NORTH':
+                            self.tcpRot = -scaled_value
+                            print_boh(f" tcp ROT = {self.tcpRot}")
+
                             #print("777 cmd -- ABS HATOX", code, self.rz_axis) # nscoperto dovrebbe essere freccia sx però in BTN printa code = HATOX.. quindi c'è qualche imprecisione di codice ma hatox è RB o LB
                         
                         # Reset counter after update

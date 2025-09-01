@@ -5,7 +5,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
 from sensor_msgs.msg import Image
-from my_cpp_py_pkg.msg import RealState  # Custom message
+from hil_serl_hiro_utils.msg import RealState  # Custom message
 from std_msgs.msg import Float32MultiArray
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -20,6 +20,17 @@ import threading
 import time
 ##########
 
+##################################################################
+import tf_transformations
+import random
+
+# def quat_to_euler(q):
+    # return tf_transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+
+def euler_to_quat(roll, pitch, yaw):
+    q = tf_transformations.quaternion_from_euler(roll, pitch, yaw)
+    return q  # [x, y, z, w]
+##################################################################
 
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
@@ -36,26 +47,51 @@ class RealStateBridgeNode(Node):
 
 
         ############################ Real UR Hard Coded safety Positions ###################################
-        #  STRART position:
-        # x: -0.5062012016721099
-        # y: 0.17
-        # z: 0.43
+        ##  START position:
+        ## x: -0.5062012016721099
+        ## y: 0.17
+        ## z: 0.43
 
-        # MY HIGH LIMIT
-        # x: -0.43935539849167454 --> aumento max a -0.35
-        # Y = 0.3603177944808122 # aumento ma poco --> 0.41 perchè c'è piano sicurezza stra vicino lì
-        # Z: 0.584233792408213
+        ## MY HIGH LIMIT
+        ## x: -0.43935539849167454 --> aumento max a -0.35
+        ## Y = 0.3603177944808122 # aumento ma poco --> 0.41 perchè c'è piano sicurezza stra vicino lì
+        ## Z: 0.584233792408213
 
 
-        # MY LOW LIMIT
-        # x: -0.6606584651129386 --> aumento a -0.77 (direzione avanti da robot verso copmuter)
-        # Y = -0.2600768840612451
-        #    z: 0.21108867841114953
+        ## MY LOW LIMIT
+        ## x: -0.6606584651129386 --> aumento a -0.77 (direzione avanti da robot verso copmuter)
+        ##Y = -0.2600768840612451
+        ##    z: 0.21108867841114953
 
-        TEMP_REAL_POSITION = np.array([-0.5, 0.17, 0.43])
-        POSE_LIMIT_HIGH =  TEMP_REAL_POSITION + np.array([0.15, 0.24, 0.25]) 
-        POSE_LIMIT_LOW = TEMP_REAL_POSITION - np.array([0.27, 0.43, 0.22])  
+        ## TEMP_REAL_POSITION = np.array([-0.5, 0.17, 0.43])
+        ## POSE_LIMIT_HIGH =  TEMP_REAL_POSITION + np.array([0.1, 0.2, 0.22])  #### questi valori buoni e abbastanza larghi
+        ## POSE_LIMIT_LOW = TEMP_REAL_POSITION - np.array([0.2, 0.35, 0.22])  #### questi valori buoni e abbastanza larghi
+         
 
+        ########################### AVVITATORE Hard Coded safety Positions ###################################
+        ##  START position:
+        ## x: -0.5031390929532893
+        ## y: 0.14744824937867473
+        ## z: 0.36
+
+        ## MY HIGH LIMIT
+        ## x: -0.48 --> -0.475
+        ## Y = 0.164 # aumento ma poco --> 0.41 perchè c'è piano sicurezza stra vicino lì
+        ## Z: 0.45
+
+
+        ## MY LOW LIMIT
+        ## x: -0.53
+        ## Y = 0.13
+        ##    z: 0.2799999 # essendo vite circa 0.32 --> TODO provare con joystick dove arriva e con quale velocità
+
+
+        ## z: z: 0.32363064023408317 --> H vite circa, un po meno in realtà tipo 0,30840358685060526
+
+        TEMP_REAL_POSITION = np.array([-0.5031390929532893, 0.14744824937867473, 0.36])
+        POSE_LIMIT_HIGH =  TEMP_REAL_POSITION + np.array([0.035, 0.035, 0.09]) # leggermente più ampio ma cappo azioni lato wrapper, per avere più libertà MA movimenti più precisi 
+        POSE_LIMIT_LOW = TEMP_REAL_POSITION - np.array([0.035, 0.035, 0.0701])
+         
         # safety boundary box
         self.xyz_bounding_box = gym.spaces.Box(
             POSE_LIMIT_LOW[:3],
@@ -125,21 +161,30 @@ class RealStateBridgeNode(Node):
         reset_pose.header.stamp = self.get_clock().now().to_msg()
         reset_pose.header.frame_id = 'base_link'
 
-        reset_pose.pose.position.x =  -0.5 #-0.69139
-        reset_pose.pose.position.y = 0.17
-        reset_pose.pose.position.z = 0.43
-
         #  My Custom Gripper Case !! (FLANGIA GIRATA 90° RISPETTO ALTRO)
-        reset_pose.pose.orientation.x  =  0.7216245107730183
-        reset_pose.pose.orientation.y  = 0.6922019755939712
-        reset_pose.pose.orientation.z  =  -0.0007271693071297483
-        reset_pose.pose.orientation.w  =  -0.010675282675617136
 
-        #  Basler Lamp Case
-        # reset_pose.pose.orientation.x  = -0.5061135480338557
-        # reset_pose.pose.orientation.y  = -0.4931089242003056
-        # reset_pose.pose.orientation.z  =  0.49645543168566075
-        # reset_pose.pose.orientation.w  =  0.5042069711144461
+        # reset_pose.pose.position.x =  -0.5 #-0.69139
+        # reset_pose.pose.position.y = 0.17
+        # reset_pose.pose.position.z = 0.43
+
+        # reset_pose.pose.orientation.x  =  0.7216245107730183
+        # reset_pose.pose.orientation.y  = 0.6922019755939712
+        # reset_pose.pose.orientation.z  =  -0.0007271693071297483
+        # reset_pose.pose.orientation.w  =  -0.010675282675617136
+
+        #  Atlas screwdriver Case
+        
+        # Range di randomizzazione
+        delta = 0.025
+
+        reset_pose.pose.position.x =  -0.5031390929532893 + random.uniform(-delta, delta) 
+        reset_pose.pose.position.y = 0.14744824937867473 + random.uniform(-delta, delta)
+        reset_pose.pose.position.z = 0.36  #slightly above obj 
+
+        reset_pose.pose.orientation.x  = -0.5061135480338557
+        reset_pose.pose.orientation.y  = -0.4931089242003056
+        reset_pose.pose.orientation.z  =  0.49645543168566075
+        reset_pose.pose.orientation.w  =  0.5042069711144461
 
         self.tcp_goal_publisher.publish(reset_pose)
         self.get_logger().info("Reset service called, publishing reset pose.")
@@ -164,24 +209,6 @@ class RealStateBridgeNode(Node):
         closed = 239.0
         open =  0.0
 
-
-        ################## con elettrovalvola non è più così ma ho solo: output 7 ACCESO / SPENTO --> gripper CHIUSO / APERTO ##################
-        # for d_state in msg.digital_out_states:
-        #     if d_state.pin ==6:
-        #         pin_6_state = d_state.state
-        #     elif d_state.pin == 7:
-        #         pin_7_state = d_state.state
-
-        # # self.get_logger().info(f"Gripper actuator state: Pin 6: {pin_6_state}, Pin 7: {pin_7_state}")
-        # if pin_6_state and not pin_7_state:
-        #     self.gripper_act_state.data = open
-        # elif pin_7_state and not pin_6_state:
-        #     self.gripper_act_state.data = closed 
-        # else: # 6 == 7 -> Do nothing, keep last state (Open or Closed)
-        #     pass
-        ################## con elettrovalvola non è più così ma ho solo: output 7 ACCESO / SPENTO --> gripper CHIUSO / APERTO ##################
-        
-
         for d_state in msg.digital_out_states:
             if d_state.pin ==7:
                 pin_7_state = d_state.state
@@ -192,6 +219,37 @@ class RealStateBridgeNode(Node):
             self.gripper_act_state.data = open 
 
         self.get_logger().info(f"Gripper actuator state: {self.gripper_act_state}")
+
+        print_orange(f"current quat X = {self.tcp_pose.pose.orientation.x},\nY =  {self.tcp_pose.pose.orientation.y}\nZ = {self.tcp_pose.pose.orientation.z}\nW = {self.tcp_pose.pose.orientation.w}")
+        # 1. Quaternione → Euler
+        curr_roll, curr_pitch, curr_yaw = tf_transformations.euler_from_quaternion([
+            self.tcp_pose.pose.orientation.x, self.tcp_pose.pose.orientation.y, self.tcp_pose.pose.orientation.z, self.tcp_pose.pose.orientation.w
+        ])
+        print_green(f"ROLL = {curr_roll},\nPITCH =  {curr_pitch}\nYAW = {curr_yaw}")
+
+
+        ################################## MINIMI #################################
+        # ROLL = -2.9
+        # PITCH =  -0.17071212282544174 --> -0.15
+        # YAW = 1,47
+        ############################################################
+        
+        ################################## MAXXIMI #################################
+        # ROLL = + 2.9
+        # PITCH = 0.15
+        # YAW = 1,59
+        ############################################################
+
+
+        ######### caso avvitatore: iniziale RPY
+        #  ROLL = -1.57
+        #  PITCH =  0.00
+        #  YAW = 1.57
+
+        ###### posizione inserimento bit nella vite (con PC messo sugli scotch) circa:
+        # x: -0.5052123373348968
+        # y: 0.14769605069215744
+        # z: 0.30840358685060526
 
 
     def tcp_pose_callback(self, msg):
@@ -250,10 +308,6 @@ class RealStateBridgeNode(Node):
         
         # ----------------------------------------- GRIPPER -----------------------------------------
         # -------------------------------------------------------------------------------------------
-
-        #######################################################################################################################
-        #### TODO valutare come aggiungere qui qualcosa per far si che non spammi aperto/chiuso per non far esplodere robot ###
-        #######################################################################################################################
 
         # fourth = Gripper
         self.gripper_command.data =  msg.data[3] 
